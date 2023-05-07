@@ -1,0 +1,46 @@
+﻿@inherits ComponentBase
+@typeparam T
+@using System.Reflection
+
+<MudTable @ref="Table" T="T" ServerData="@LoadData" Virtualize="false" HeaderClass="table-head-bordered" FixedHeader="true" FixedFooter="true" Breakpoint="Breakpoint.None" Bordered="true" Dense="true" Striped="true" Hover="true" HorizontalScrollbar="true" RowClassFunc="@GetRowStyle" OnRowClick="@OnRowClick" @bind-RowsPerPage="RowsPerPage" @attributes="InputAttributes">
+	<ColGroup>
+		@foreach(var property in Properties)
+		{
+			<col style="width: 60px;"/>
+		}
+	</ColGroup>
+	<HeaderContent>
+		@foreach(PropertyInfo property in Properties)
+		{
+			<MudTh>
+				<MudTableSortLabel SortLabel="@property.Name" T="T">@property.Name</MudTableSortLabel>
+				<div class="DataFilter">
+					<DataFilter @ref="@DataFilterReferences[@property.Name]" T="T" FilteredProperty="@property.Name" FilterExpressionChanged="@((expression)=>FilterExpressionChanged(@property.Name, expression))" Operator="@DataFilterOperators[property.Name]" OperatorChanged="@((newValue) => UpdateDataFilterOperator(property.Name, newValue))" FilterString="@DataFilterValues[property.Name]" FilterStringChanged="@((newValue) => UpdateDataFilterValue(property.Name, newValue))" />
+				</div>
+			</MudTh>
+		}
+	</HeaderContent>
+	<RowTemplate>
+		@foreach(var property in Properties)
+		{
+			<MudTd Class="nowrap less-padding" DataLabel="@property.Name">@GetPropertyValue(context, property)</MudTd>
+		}
+	</RowTemplate>
+	<PagerContent>
+		<MudButton OnClick="CopyToClipboard" Disabled="!CanCopyToClipboard">Copy page</MudButton>
+		@if (SelectedItems.Count > 0)
+		{
+			<MudButton OnClick="CopySelectionToClipboard" Disabled="!CanCopyToClipboard">Copy selected</MudButton>
+		}
+		<MudTablePager PageSizeOptions="new int[]{50, 100, 250, 500, 1000}">Camel</MudTablePager>
+	</PagerContent>
+</MudTable>
+
+@if(Exception != null)
+{
+	<br />
+	<div class="alert alert-danger" role="alert">
+		<b>BOOM!</b>
+		<br>@Exception.Message
+	</div>
+}

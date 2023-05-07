@@ -1,0 +1,10 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/FilterTable
+/FilterTable/.vs
+/FilterTable/bin
+/FilterTable/obj
+/FilterTableExample/bin/Debug/net6.0
+/FilterTableExample/obj

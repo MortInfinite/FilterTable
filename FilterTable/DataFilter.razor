@@ -1,0 +1,19 @@
+﻿@inherits ComponentBase
+@typeparam T
+
+<nobr>
+<select class="no-arrow" @bind="Operator">
+	@foreach(FilterOperators currentOperator in Operators)
+	{
+		<option value="@currentOperator">@currentOperator.StringFormat()</option>
+	}
+</select>
+@if(FilterValid)
+{
+<input class="column-filter" type="text" @bind="FilterString"/>
+}
+else
+{
+<input class="column-filter invalid" type="text" @bind="FilterString"/>
+}
+</nobr>
