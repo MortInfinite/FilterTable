@@ -1,7 +1,9 @@
 # FilterTable
 A filtered table component, using Blazor Server. 
 
-The filtered table component will generate a LINQ statement, based on the filter criteria selected by the user and will show the filtered result in a pageable and sortable table. 
+The filtered table component will generate a LINQ statement, based on the filter criteria selected by the user, and will show the filtered result in a pageable and sortable table. 
+
+The contents of the table (or selected rows), can be copied to the clipboard, in an HTML format that is suited to be pasted into Microsoft Excel.
 
 The component depends on the MudBlazor library to render the table.
 
