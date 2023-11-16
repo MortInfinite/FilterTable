@@ -1,0 +1,20 @@
+﻿@page "/LogEntriesTable"
+
+<PageTitle>Log entries</PageTitle>
+
+@using BlazorLogViewer.Data
+@using LogData
+@inject LogEntryService LogEntryService
+
+<div>
+	<DataTable @ref="Table" T="LogEntry" GetData="GetData" DataFilterOperatorChanged="DataFilterOperatorChanged" DataFilterValueChanged="DataFilterValueChanged" Height="calc(100vh - 120px)" />
+</div>
+
+@if(Exception != null)
+{
+	<br />
+	<div class="alert alert-danger" role="alert">
+		<b>BOOM!</b>
+		<br>@Exception.Message
+	</div>
+}

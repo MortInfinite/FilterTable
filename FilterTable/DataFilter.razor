@@ -2,18 +2,12 @@
 @typeparam T
 
 <nobr>
-<select class="no-arrow" @bind="Operator">
+	<select class="no-arrow" @bind="Operator" @attributes=@InputAttributes>
 	@foreach(FilterOperators currentOperator in Operators)
 	{
 		<option value="@currentOperator">@currentOperator.StringFormat()</option>
 	}
 </select>
-@if(FilterValid)
-{
-<input class="column-filter" type="text" @bind="FilterString"/>
-}
-else
-{
-<input class="column-filter invalid" type="text" @bind="FilterString"/>
-}
+	@* The input box will have the " invalid" class applied if the filter string isn't empty or valid. *@
+	<input class="column-filter@((FilterEmpty || FilterValid) ? "" : " invalid")" type="text" @bind="FilterString" />
 </nobr>

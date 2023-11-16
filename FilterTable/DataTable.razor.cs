@@ -3,88 +3,10 @@ using System.Linq.Expressions;
 using Microsoft.AspNetCore.Components;
 using System.Reflection;
 using Microsoft.JSInterop;
+using FilterTypes;
 
 namespace FilterTable
 {
-	/// <summary>
-	/// Filtered data table, displaying a filtered list of public properties contained in the data type <typeparamref name="T"/>.
-	/// 
-	/// Specify a <see cref="GetData"/> delegate used to retrieve a page of data.
-	/// </summary>
-	/// <typeparam name="T">Type of data to display in the table.</typeparam>
-	/// <example>
-	/// <![CDATA[
-	/// <DataTable @ref="Table" T="MyDataType" GetData="GetMyDataType"/>
-	/// 
-	/// @{
-	///		/// <summary>
-	///		/// Returns a filtered result, by querying an EntityFramework DataContext.
-	///		/// </summary>
-	///		/// <summary>
-	///		/// Retrieves data to display in the table.
-	///		/// </summary>
-	///		/// <param name="filters">Filters to apply to the data.</param>
-	///		/// <param name="sortLabel">Name of the property that the query should be ordered in.</param>
-	///		/// <param name="sortAscending">Indicates if sorting is ascending (Otherwise it will be descending).</param>
-	///		/// <param name="skip">Number of items to skip, in the query result. This is used for paging through a large result set.</param>
-	///		/// <param name="maxCount">Maximum number of results to retrieve.</param>
-	///		/// <param name="cancellationToken">Token used to cancel the retrieval of data.</param>
-	///		/// <returns>Filtered results.</returns>
-	///		protected virtual async Task<DataTable<MyDataType>.FilteredResult> GetMyDataType(IEnumerable<Expression<Func<MyDataType, bool>>> filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken)
-	///		{ 
-	///			using(MyDataTypeContext myDataTypeContext = await MyDataTypeContextFactory.CreateDbContextAsync(cancellationToken))
-	///			{
-	///				// Queryable set of data, retrieved from the EntityFramework data context.
-	///				IQueryable<MyDataType>	myDataTypes = myDataTypeContext.MyDataTypes;
-	///				
-	///				// Filtered set of results to return.
-	///				DataTable<MyDataType>.FilteredResult filteredResult = new DataTable<MyDataType>.FilteredResult();
-	///		
-	///				try
-	///				{
-	///					// Apply filter expressions.
-	///					foreach(Expression<Func<MyDataType, bool>>? filter in filters)
-	///						myDataTypes = myDataTypes.Where(filter);
-	///		
-	///					// Sort data by the sorting label.
-	///					myDataTypes = myDataTypes.SortData(sortLabel, sortAscending);
-	///		
-	///					// Determine how many elements match the specified filter.
-	///					int totalCount = await myDataTypes.CountAsync(cancellationToken);
-	///		
-	///					// Indicate the total number of results available.
-	///					filteredResult.TotalCount = totalCount;
-	///		
-	///					if(skip < 0)
-	///						skip = 0;
-	///		
-	///					// Determine the maximum number of results to retrieve.
-	///					// This is done to prevent the SQL Server from hanging forever, if requesting more results than exist.
-	///					int maxTake = Math.Min(totalCount-skip, maxCount);
-	///		
-	///					// If there are any results and the current page contains any elements.
-	///					if(totalCount > 0 && maxTake > 0)
-	///					{
-	///						// Retrieve a subset of data.
-	///						filteredResult.Items = await myDataTypes.Skip(skip).Take(maxTake).ToArrayAsync(cancellationToken);
-	///					}
-	///					else
-	///					{ 
-	///						filteredResult.Items = new MyDataType[0];
-	///					}
-	///				}
-	///				catch
-	///				{ 
-	///					filteredResult.TotalCount	= 0;
-	///					filteredResult.Items		= new MyDataType[0];
-	///				}
-	///
-	///				return filteredResult;
-	///			}
-	///		}
-	/// }
-	/// ]]>
-	/// </example>
 	public partial class DataTable<T>
 	{
 		public DataTable()
@@ -102,7 +24,7 @@ namespace FilterTable
 		/// <param name="maxCount">Maximum number of items to return.</param>
 		/// <param name="cancellationToken">Token used to cancel the retrieval of data.</param>
 		/// <returns>Filtered results.</returns>
-		public delegate Task<FilteredResult> FilterExpressionsDelegate(IEnumerable<Expression<Func<T, bool>>> filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken);
+		public delegate Task<FilteredResult> FilterExpressionsDelegate(FilterOperation[] filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken);
 
 		/// <summary>
 		/// Number of total results and list of filtered results.
@@ -205,11 +127,11 @@ namespace FilterTable
 			if(DataFilterReferences == null)
 				return;
 
-			Dictionary<string, Expression<Func<T, bool>>> filters = new Dictionary<string, Expression<Func<T, bool>>>();
+			Dictionary<string, FilterOperation> filters = new Dictionary<string, FilterOperation>();
 
-			foreach(var dataFilterReference in DataFilterReferences)
-				if(dataFilterReference.Value?.FilterExpression != null)
-					filters[dataFilterReference.Key] = dataFilterReference.Value.FilterExpression;
+			foreach(KeyValuePair<string, DataFilter<T>?> dataFilterReference in DataFilterReferences)
+				if(dataFilterReference.Value?.FilterOperation != null)
+					filters[dataFilterReference.Key] = dataFilterReference.Value?.FilterOperation ?? new FilterOperation();
 
 			Filters = filters;
 		}
@@ -218,7 +140,7 @@ namespace FilterTable
 		/// Load data from the database.
 		/// </summary>
 		/// <param name="state">Table view state, containing sort order.</param>
-		/// <returns>Table data containing matching items.</returns>
+		/// <returns>Table data containing matching log entries.</returns>
 		private async Task<TableData<T>> LoadData(TableState state)
 		{
 			var tableData = new TableData<T>()
@@ -257,32 +179,6 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// Filter the queryable collection of items, by applying all filters in the <see cref="Filters"/> property and then
-		/// filter the remaining results by the <paramref name="searchString"/>.
-		/// </summary>
-		/// <param name="items">Items to filter.</param>
-		/// <returns>Filtered collection of items.</returns>
-		protected IQueryable<T> Filter(IQueryable<T> items)
-		{ 
-			// Apply every data filter to the queriable expression.
-			items = ApplyFilterExpressions(items);
-			return items;
-		}
-
-		/// <summary>
-		/// Apply every filter specified in the <see cref="Filters"/> dictionary, to the specified <paramref name="items"/>.
-		/// </summary>
-		/// <param name="items">Queryable items to filter.</param>
-		/// <returns>Queryable items, with an added filter.</returns>
-		protected IQueryable<T> ApplyFilterExpressions(IQueryable<T> items)
-		{ 
-			foreach(Expression<Func<T, bool>>? expression in Filters.Values)
-				items = items.Where(expression);
-
-			return items;
-		}
-
-		/// <summary>
 		/// Add the clicked item to the list of selected items.
 		/// </summary>
 		/// <param name="args">Click event, containing the selected argument.</param>
@@ -318,8 +214,8 @@ namespace FilterTable
 		/// Property that this filter applies to. 
 		/// This property is used to uniquely identify the filter expression, so it can be replaced when the filter changes.
 		/// </param>
-		/// <param name="expression">Filter expression to apply.</param>
-		protected async Task FilterExpressionChanged(string property, Expression<Func<T, bool>>? expression)
+		/// <param name="filterOperation">New filter operation to perform for the specified property.</param>
+		protected async Task FilterOperationChanged(string property, FilterOperation? filterOperation)
 		{
 			if(!InitialRenderingComplete)
 				return;
@@ -521,7 +417,7 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// Table containing items.
+		/// Table containing log entries.
 		/// </summary>
 		protected MudTable<T>? Table
 		{ 
@@ -530,13 +426,13 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// Expression filters defined for each DataFilter column.
+		/// Filter operations defined for each DataFilter column.
 		/// </summary>
-		protected virtual Dictionary<string, Expression<Func<T, bool>>> Filters
+		protected virtual Dictionary<string, FilterOperation> Filters
 		{
 			get; 
 			set;
-		} = new Dictionary<string, Expression<Func<T, bool>>>();
+		} = new Dictionary<string, FilterOperation>();
 
 		/// <summary>
 		/// Token used to cancel the previous query.

@@ -1,0 +1,8 @@
+﻿@page "/"
+@namespace BlazorLogViewer.Server.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+	Layout = "_Layout";
+}
+
+<component type="typeof(BlazorLogViewer.Server.App)" render-mode="ServerPrerendered" />

@@ -15,7 +15,7 @@
 			<MudTh>
 				<MudTableSortLabel SortLabel="@property.Name" T="T">@property.Name</MudTableSortLabel>
 				<div class="DataFilter">
-					<DataFilter @ref="@DataFilterReferences[@property.Name]" T="T" FilteredProperty="@property.Name" FilterExpressionChanged="@((expression)=>FilterExpressionChanged(@property.Name, expression))" Operator="@DataFilterOperators[property.Name]" OperatorChanged="@((newValue) => UpdateDataFilterOperator(property.Name, newValue))" FilterString="@DataFilterValues[property.Name]" FilterStringChanged="@((newValue) => UpdateDataFilterValue(property.Name, newValue))" />
+					<DataFilter @ref="@DataFilterReferences[@property.Name]" T="T" FilteredProperty="@property.Name" FilterOperationChanged="@((FilterOperation? expression)=>FilterOperationChanged(@property.Name, expression))" Operator="@DataFilterOperators[property.Name]" OperatorChanged="@((newValue) => UpdateDataFilterOperator(property.Name, newValue))" FilterString="@DataFilterValues[property.Name]" FilterStringChanged="@((newValue) => UpdateDataFilterValue(property.Name, newValue))" />
 				</div>
 			</MudTh>
 		}

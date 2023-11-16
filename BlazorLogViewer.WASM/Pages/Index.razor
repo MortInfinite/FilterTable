@@ -1,0 +1,18 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+<PageTitle>Index</PageTitle>
+
+<h3>
+@*	Hello, @context.User.Identity?.Name.*@
+	Hello.
+	<br />
+	Select the data to view, in the left pane.
+</h3>
+
+<p>
+	<i>Please note that this site may log any searches being performed.</i>
+</p>
+
+<CookieWarning/>
