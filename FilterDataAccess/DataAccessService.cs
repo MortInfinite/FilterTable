@@ -117,11 +117,11 @@ namespace FilterDataAccess
 					if(totalCount > 0 && maxTake > 0)
 					{
 						// Retrieve a subset of data.
-						queryResult.LogEntries = await queryableValues.Skip(skip).Take(maxTake).ToArrayAsync(cancellationToken);
+						queryResult.Results = await queryableValues.Skip(skip).Take(maxTake).ToArrayAsync(cancellationToken);
 					}
 					else
 					{ 
-						queryResult.LogEntries = new TValue[0];
+						queryResult.Results = new TValue[0];
 					}
 				}
 				catch(OperationCanceledException)
@@ -129,14 +129,14 @@ namespace FilterDataAccess
 					System.Diagnostics.Trace.WriteLine($"Canceled retrieving filtered values.");
 
 					queryResult.TotalCount	= 0;
-					queryResult.LogEntries	= new TValue[0];
+					queryResult.Results	= new TValue[0];
 				}
 				catch(Exception exception)
 				{ 
 					System.Diagnostics.Trace.WriteLine($"Failed to retrieve filtered values: {exception.ToString()}.");
 
 					queryResult.TotalCount	= 0;
-					queryResult.LogEntries	= new TValue[0];
+					queryResult.Results	= new TValue[0];
 				}
 
 				System.Diagnostics.Trace.WriteLine("Finished GetFilteredValues.");

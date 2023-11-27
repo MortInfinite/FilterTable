@@ -8,7 +8,7 @@
 		/// <summary>
 		/// Results matching the filter criteria.
 		/// </summary>
-		public IList<T> LogEntries
+		public IList<T> Results
 		{ 
 			get;
 			set;

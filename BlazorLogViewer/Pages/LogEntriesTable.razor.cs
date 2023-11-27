@@ -83,7 +83,7 @@ namespace BlazorLogViewer.Pages
 				DataTable<LogEntry>.FilteredResult filteredResult = new DataTable<LogEntry>.FilteredResult()
 				{ 
 					TotalCount	= queryResult.TotalCount,
-					Items		= queryResult.LogEntries
+					Items		= queryResult.Results
 				};
 
 				return filteredResult;

@@ -112,8 +112,8 @@ namespace LogEntryDataAccessUnitTest
 
 				QueryResult<LogEntry> result = await message.Content.ReadFromJsonAsync<QueryResult<LogEntry>>();
 				Assert.IsTrue(result.TotalCount > 0, $"The call indicated that no data matched the filter.");
-				Assert.IsNotNull(result.LogEntries, $"The call returned no log entries.");
-				Assert.IsTrue(result.LogEntries[0].Id > 0, $"The ID of the first retrieved entry, was not valid.");
+				Assert.IsNotNull(result.Results, $"The call returned no log entries.");
+				Assert.IsTrue(result.Results[0].Id > 0, $"The ID of the first retrieved entry, was not valid.");
 			}
         }
 
@@ -135,8 +135,8 @@ namespace LogEntryDataAccessUnitTest
 
 				QueryResult<LogEntry> result = await message.Content.ReadFromJsonAsync<QueryResult<LogEntry>>();
 				Assert.IsTrue(result.TotalCount > 0, $"The call indicated that no data matched the filter.");
-				Assert.IsNotNull(result.LogEntries, $"The call returned no log entries.");
-				Assert.IsTrue(result.LogEntries[0].Id > 0, $"The ID of the first retrieved entry, was not valid.");
+				Assert.IsNotNull(result.Results, $"The call returned no log entries.");
+				Assert.IsTrue(result.Results[0].Id > 0, $"The ID of the first retrieved entry, was not valid.");
 			}
         }
 		#endregion
