@@ -8,21 +8,29 @@ namespace FilterDataAccess
 	public static class QueryableExtensions
 	{
 		/// <summary>
-		/// Sorts the specified source as either ascending or descending.
+		/// Sorts the specified data.
 		/// </summary>
-		/// <typeparam name="TSource">The type of the elements of source.</typeparam>
-		/// <typeparam name="TKey">The type of the key returned by the function that is represented by keySelector.</typeparam>
-		/// <param name="source">A sequence of values to order.</param>
-		/// <param name="keySelector">A function to extract a key from an element.</param>
-		/// <param name="ascending">Whether to sort by ascending (true) or descending (false).</param>
-		/// <returns>An System.Linq.IOrderedQueryable`1 whose elements are sorted according to a key.</returns>
-		/// <exception cref="System.ArgumentNullException">source or keySelector is null.</exception>
-		public static IOrderedQueryable<TSource> OrderBy<TSource, TKey>(this IQueryable<TSource> source, Expression<Func<TSource, TKey>> keySelector, bool ascending)
+		/// <param name="source">Data to to sort.</param>
+		/// <param name="sortLabel">Name of the field to sort by.</param>
+		/// <param name="sortAscending">Indicates if results should be sorted in ascending order (true) or descending order (false).</param>
+		public static IOrderedQueryable<T> SortData<T>(this IQueryable<T> source, string sortLabel, bool sortAscending=true)
 		{
-			if(ascending)
-				return source.OrderBy(keySelector);
+			// Define the type as a parameter.
+			ParameterExpression parameterExpression = Expression.Parameter(typeof(T));
+
+			// Define the property name as a parameter.
+			MemberExpression memberExpression = Expression.Property(parameterExpression, sortLabel);
+
+			// Convert the member into an object.
+			UnaryExpression unaryExpression = Expression.Convert(memberExpression, typeof(object));
+
+			// Define an expression that performs an operation on the property.
+			Expression<Func<T, object>> expression = Expression.Lambda<Func<T, object>>(unaryExpression, parameterExpression);
+
+			if(sortAscending)
+				return source.OrderBy(expression);
 			else
-				return source.OrderByDescending(keySelector);
+				return source.OrderByDescending(expression);
 		}
 	}
 }
