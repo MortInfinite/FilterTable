@@ -1,12 +1,16 @@
 ﻿using System.Diagnostics;
+using System.ComponentModel;
 
 namespace FilterTypes
 {
 	/// <summary>
 	/// Describes a filter operation to perform, when filtering data.
+	/// 
+	/// This type is mutable.
 	/// </summary>
-	[DebuggerDisplay("{Property} {Operator} {Value}")]
-	public struct FilterOperation
+	/// <see cref="FilterOperationValue">This is an immutable version of the same data.</see>
+	[DebuggerDisplay("{Property,nq} {Operator} {Value}")]
+	public class FilterOperation	:NotifyPropertyChangedBase
 	{
 		/// <summary>
 		/// Creates a new blank filter operation.
@@ -29,22 +33,45 @@ namespace FilterTypes
 		}
 
 		/// <summary>
+		/// Creates a new <see cref="FilterOperationValue"/> based on the values of the <see cref="FilterOperation"/>.
+		/// </summary>
+		/// <param name="filterOperationClass"><see cref="FilterOperation"/> to convert to a <see cref="FilterOperationValue"/>.</param>
+		public static implicit operator FilterOperationValue(FilterOperation filterOperationClass)
+		{ 
+			return new FilterOperationValue(filterOperationClass.Property, filterOperationClass.Operator, filterOperationClass.Value);
+		}
+
+		/// <summary>
 		/// Name of the property that the filter will apply to.
 		/// </summary>
 		public string Property
 		{
-			get; 
-			set;
-		} = string.Empty;
+			get
+			{
+				return m_property;
+			}
+			set
+			{
+				// Update the field and notify subscribers that the property changed.
+				this.SetProperty(ref m_property, value, NotifyPropertyChanged);
+			}
+		}
 
 		/// <summary>
 		/// Which filter operation to perform on the data.
 		/// </summary>
 		public FilterOperators Operator
 		{
-			get; 
-			set;
-		} = FilterOperators.Equals;
+			get
+			{
+				return m_operator;
+			}
+			set
+			{
+				// Update the field and notify subscribers that the property changed.
+				this.SetProperty(ref m_operator, value, NotifyPropertyChanged);
+			}
+		}
 
 		/// <summary>
 		/// Value to filter by.
@@ -53,8 +80,32 @@ namespace FilterTypes
 		/// </summary>
 		public string? Value
 		{
-			get; 
-			set;
-		} = null;
+			get
+			{
+				return m_value;
+			}
+			set
+			{
+				// Update the field and notify subscribers that the property changed.
+				this.SetProperty(ref m_value, value, NotifyPropertyChanged);
+			}
+		}
+
+		#region Fields
+		/// <summary>
+		/// Backing field for the <see cref="Property"/> property.
+		/// </summary>
+		private string m_property = string.Empty;
+
+		/// <summary>
+		/// Backing field for the <see cref="Operator"/> property.
+		/// </summary>
+		private FilterOperators m_operator = FilterOperators.Equals;
+
+		/// <summary>
+		/// Backing field for the <see cref="Value"/> property.
+		/// </summary>
+		private string? m_value = null;
+		#endregion
 	}
 }

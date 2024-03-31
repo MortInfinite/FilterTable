@@ -73,7 +73,7 @@ namespace BlazorLogViewer.Pages
 		/// <param name="maxCount">Maximum number of results to retrieve.</param>
 		/// <param name="cancellationToken">Token used to cancel the retrieval of data.</param>
 		/// <returns>Filtered results.</returns>
-		protected virtual async Task<DataTable<LogEntry>.FilteredResult> GetData(FilterOperation[] filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken)
+		protected virtual async Task<DataTable<LogEntry>.FilteredResult> GetData(FilterOperationValue[] filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken)
 		{ 
 			try
 			{
@@ -106,6 +106,27 @@ namespace BlazorLogViewer.Pages
 
 				return filteredResult;
 			}
+		}
+
+		/// <summary>
+		/// Changes the format of date time values.
+		/// </summary>
+		/// <param name="context">Object from which to retrieve the value of the <paramref name="property"/>.</param>
+		/// <param name="property">Property to retrieve from the <paramref name="context"/>.</param>
+		/// <returns>Value of the property.</returns>
+		protected virtual object? GetPropertyValue(object context, PropertyInfo property)
+		{
+			object? value = Table?.GetPropertyValueDefault(context!, property);
+			if(value == null)
+				return null;
+
+			if(property.PropertyType.IsAssignableFrom(typeof(DateTime)) && DateTime.TryParse(value.ToString(), out DateTime parsedDateTime))
+			{
+				string result = parsedDateTime.ToString("dd-MM-yyyy HH:mm:ss");
+				return result;
+			}
+
+			return value;
 		}
 
 		/// <summary>

@@ -1,9 +1,9 @@
 ﻿using MudBlazor;
-using System.Linq.Expressions;
 using Microsoft.AspNetCore.Components;
 using System.Reflection;
 using Microsoft.JSInterop;
 using FilterTypes;
+using System.Linq;
 
 namespace FilterTable
 {
@@ -24,7 +24,7 @@ namespace FilterTable
 		/// <param name="maxCount">Maximum number of items to return.</param>
 		/// <param name="cancellationToken">Token used to cancel the retrieval of data.</param>
 		/// <returns>Filtered results.</returns>
-		public delegate Task<FilteredResult> FilterExpressionsDelegate(FilterOperation[] filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken);
+		public delegate Task<FilteredResult> FilterExpressionsDelegate(FilterOperationValue[] filters, string sortLabel, bool sortAscending, int skip, int maxCount, CancellationToken cancellationToken);
 
 		/// <summary>
 		/// Number of total results and list of filtered results.
@@ -52,9 +52,71 @@ namespace FilterTable
 			}
 		}
 
+		/// <summary>
+		/// Delegate used to Retrieve the value of the specified <paramref name="property"/>, from the <paramref name="context"/>.
+		/// </summary>
+		/// <param name="context">Object from which to retrieve the value of the <paramref name="property"/>.</param>
+		/// <param name="property">Property to retrieve from the <paramref name="context"/>.</param>
+		/// <returns>Value of the property.</returns>
+		public delegate object? GetPropertyValueDelegate(object context, PropertyInfo property);
+
+		/// <summary>
+		/// Delegate used to retrieve the column name of the specified property.
+		/// </summary>
+		/// <param name="property">Property for which to retrieve the column name.</param>
+		/// <returns>Name of the column.</returns>
+		public delegate string GetColumnNameDelegate(PropertyInfo property);
 		#endregion
 
 		#region Methods
+		/// <summary>
+		/// Reloads server data.
+		/// </summary>
+		/// <returns>Created task.</returns>
+		public virtual async Task Reload()
+		{ 
+			if(Table == null)
+				return;
+
+			await Table.ReloadServerData();
+		}
+
+		/// <summary>
+		/// Determine which class should be applied to the row.
+		/// </summary>
+		/// <param name="element">Element contained in the row.</param>
+		/// <param name="rowNumber">Row number containing the element.</param>
+		/// <returns>Class to add to the row.</returns>
+		public virtual string GetRowClassDefault(T element, int rowNumber)
+		{
+			if(SelectedItems.Contains(element))
+				return "selected";
+
+			return string.Empty;
+		}
+
+		/// <summary>
+		/// Retrieve the value of the specified <paramref name="property"/>, from the <paramref name="context"/>.
+		/// </summary>
+		/// <param name="context">Object from which to retrieve the value of the <paramref name="property"/>.</param>
+		/// <param name="property">Property to retrieve from the <paramref name="context"/>.</param>
+		/// <returns>Value of the property.</returns>
+		public virtual object? GetPropertyValueDefault(object context, PropertyInfo property)
+		{ 
+			object? value = property.GetValue(context);
+			return value;
+		}
+
+		/// <summary>
+		/// Returns the name of the <see cref="property"/>.
+		/// </summary>
+		/// <param name="property">Property for which to return the name.</param>
+		/// <returns>Name of the property.</returns>
+		public virtual string GetColumnNameDefault(PropertyInfo property)
+		{ 
+			return property?.Name ?? string.Empty;
+		}
+
 		/// <summary>
 		/// Updates the properties from the query string and ensures that the navigation manager location is monitored for changes.
 		/// </summary>
@@ -77,6 +139,11 @@ namespace FilterTable
 
 			DataFilterOperators = dataFilterOperators;
 			DataFilterValues	= dataFilterValues;
+
+			// Add a new empty data filter at the end of non-empty filters.
+			// Remove any empty filters, except for the last one.
+			foreach(var property in Properties)
+				AddFilter(property.Name, DefaultDataFilterValues.GetValueOrDefault(property.Name, string.Empty)!);
 		}
 
 		/// <summary>
@@ -108,32 +175,10 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// Retrieve the value of the specified <paramref name="property"/>, from the <paramref name="context"/>.
-		/// </summary>
-		/// <param name="context">Object from which to retrieve the value of the <paramref name="property"/>.</param>
-		/// <param name="property">Property to retrieve from the <paramref name="context"/>.</param>
-		/// <returns>Value of the property.</returns>
-		protected virtual object? GetPropertyValue(object context, PropertyInfo property)
-		{ 
-			object? value = property.GetValue(context);
-			return value;
-		}
-
-		/// <summary>
 		/// Updates the expression filters defined for each DataFilter column.
 		/// </summary>
 		protected virtual void UpdateFilters()
 		{ 
-			if(DataFilterReferences == null)
-				return;
-
-			Dictionary<string, FilterOperation> filters = new Dictionary<string, FilterOperation>();
-
-			foreach(KeyValuePair<string, DataFilter<T>?> dataFilterReference in DataFilterReferences)
-				if(dataFilterReference.Value?.FilterOperation != null)
-					filters[dataFilterReference.Key] = dataFilterReference.Value?.FilterOperation ?? new FilterOperation();
-
-			Filters = filters;
 		}
 
 		/// <summary>
@@ -141,7 +186,7 @@ namespace FilterTable
 		/// </summary>
 		/// <param name="state">Table view state, containing sort order.</param>
 		/// <returns>Table data containing matching log entries.</returns>
-		private async Task<TableData<T>> LoadData(TableState state)
+		protected virtual async Task<TableData<T>> LoadData(TableState state)
 		{
 			var tableData = new TableData<T>()
 			{ 
@@ -157,7 +202,12 @@ namespace FilterTable
 				// Disable the copy to clipboard button, while loading data.
 				CanCopyToClipboard = false;
 
-				DataTable<T>.FilteredResult filteredResult = await GetData(Filters.Values.ToArray(), state.SortLabel, state.SortDirection == SortDirection.Ascending, state.Page * state.PageSize, state.PageSize, default);
+				// Retrieve those of the filters that have a filter value.
+				FilterOperationValue[] filters = FilterOperations	.Where(currentFilter => !string.IsNullOrEmpty(currentFilter.Value))
+													.Select(currentFilter => (FilterOperationValue) currentFilter)
+													.ToArray();
+
+				DataTable<T>.FilteredResult filteredResult = await GetData(filters, state.SortLabel, state.SortDirection == SortDirection.Ascending, state.Page * state.PageSize, state.PageSize, default);
 
 				tableData.TotalItems	= filteredResult.TotalCount;
 				tableData.Items			= filteredResult.Items;
@@ -179,6 +229,47 @@ namespace FilterTable
 		}
 
 		/// <summary>
+		/// Add a new filter to the specified property.
+		/// </summary>
+		/// <param name="propertyName">Name of the property to apply the filter to.</param>
+		/// <param name="value">Initial value to set for the added filter.</param>
+		protected virtual void AddFilter(string propertyName, string? value=null)
+		{ 
+			FilterOperation filterOperation = new FilterOperation()
+			{
+				Property	= propertyName,
+				Operator	= DefaultDataFilterOperators.GetValueOrDefault(propertyName, FilterOperators.Equals),
+				Value		= value	?? string.Empty
+			};
+
+			// When the filter operation changes, reload the server data and ensure that an empty filter exists for each property.
+			filterOperation.PropertyChanged += FilterOperation_PropertyChanged;
+
+			//Filters.Add(filterOperation);
+			FilterOperations.Insert(0, filterOperation);
+
+			// Update the UI.
+			StateHasChanged();
+		}
+
+		/// <summary>
+		/// Remove an existing filter and unsubscribe from its change events.
+		/// </summary>
+		/// <param name="filterOperation">Filter to remove.</param>
+		/// <returns>Returns true if the filter was removed or false if the filter did not exist in the list of <see cref="FilterOperations"/>.</returns>
+		protected virtual bool RemoveFilter(FilterOperation filterOperation)
+		{ 
+			bool exists = FilterOperations.Remove(filterOperation);
+			if(!exists)
+				return false;
+
+			// Unsubscribe from the removed filter's change events.
+			filterOperation.PropertyChanged -= FilterOperation_PropertyChanged;
+
+			return true;
+		}
+
+		/// <summary>
 		/// Add the clicked item to the list of selected items.
 		/// </summary>
 		/// <param name="args">Click event, containing the selected argument.</param>
@@ -190,42 +281,38 @@ namespace FilterTable
 			else
 				SelectedItems.Remove(args.Item);
 		}
-
-		/// <summary>
-		/// Determine which class should be applied to the row.
-		/// </summary>
-		/// <param name="element">Element contained in the row.</param>
-		/// <param name="rowNumber">Row number containing the element.</param>
-		/// <returns>Class to add to the row.</returns>
-		protected virtual string GetRowStyle(T element, int rowNumber)
-		{
-			if(SelectedItems.Contains(element))
-				return "selected";
-
-			return string.Empty;
-		}
 		#endregion
 
 		#region Event handlers
+
 		/// <summary>
-		/// Update the filter dictionary with the new filter expression, belonging to the specified property.
+		/// Ensure that exactly one empty filter exists, per property.
 		/// </summary>
-		/// <param name="property">
-		/// Property that this filter applies to. 
-		/// This property is used to uniquely identify the filter expression, so it can be replaced when the filter changes.
-		/// </param>
-		/// <param name="filterOperation">New filter operation to perform for the specified property.</param>
-		protected async Task FilterOperationChanged(string property, FilterOperation? filterOperation)
-		{
-			if(!InitialRenderingComplete)
-				return;
+		protected virtual void EnsureSingleEmptyFilterPerProperty()
+		{ 
+			foreach(PropertyInfo property in Properties)
+			{
+				string propertyName = property.Name;
+				propertyName .ToString();
 
-			// Update the Filters property with filter expressions from each DataColumn.
-			UpdateFilters();
+				FilterOperation[] filtersMatchingProperty = FilterOperations.Where(filter => filter.Property == property.Name).ToArray();
+				FilterOperation[] emptyFilters = filtersMatchingProperty.Where(filter => string.IsNullOrEmpty(filter.Value)).ToArray();
 
-			// Ask the data table to request new data to be loaded, by calling the LoadData method.
-			if(Table != null)
-				await Table.ReloadServerData();
+				emptyFilters.ToString();
+
+				if(emptyFilters.Length < 1)
+				{
+					// If no empty filters exist, add one now.
+					AddFilter(property.Name);
+				}
+				else if(emptyFilters.Length > 1)
+				{
+					// Remove all empty filters, except the last one.
+					IEnumerable<FilterOperation> filtersToRemove = emptyFilters.TakeLast(emptyFilters.Length-1).ToArray();
+					foreach(FilterOperation filterToRemove in filtersToRemove)
+						RemoveFilter(filterToRemove);
+				}
+			}
 		}
 
 		/// <summary>
@@ -304,6 +391,27 @@ namespace FilterTable
 			}
 		}
 
+		/// <summary>
+		/// Ensure an empty data filter exists for each property and reload the server data, now that values changed.
+		/// </summary>
+		/// <param name="sender">Not used.</param>
+		/// <param name="e">Not used.</param>
+		protected virtual void FilterOperation_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+		{
+			if(!InitialRenderingComplete)
+				return;
+
+			Task.Run(async ()=>
+			{
+				// Add a new empty data filter at the end of non-empty filters.
+				// Remove any empty filters, except for the last one.
+				EnsureSingleEmptyFilterPerProperty();
+
+				// Ask the data table to request new data to be loaded, by calling the LoadData method.
+				if(Table != null)
+					await Table.ReloadServerData();
+			});
+		}
 		#endregion
 
 		#region Properties
@@ -328,11 +436,106 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// Indicates if the CopyToClipboard button is disabled.
+		/// Name of the property to sort by.
 		/// </summary>
-		protected bool CanCopyToClipboard
+		[Parameter]
+		public string? SortProperty
 		{
-			get; 
+			get
+			{
+				return m_sortProperty;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_sortProperty)
+					return;
+
+				m_sortProperty = value;
+
+				// Notify subscribers that the property changed.
+				SortPropertyChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="SortProperty"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<string?> SortPropertyChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// Sort direction applied to the <see cref="SortProperty"/>.
+		/// </summary>
+		[Parameter]
+		public SortDirection SortDirection
+		{
+			get
+			{
+				return m_sortDirection;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_sortDirection)
+					return;
+
+				m_sortDirection = value;
+
+				// Notify subscribers that the property changed.
+				SortDirectionChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="SortDirection"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<SortDirection> SortDirectionChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// Implementation used to retrieve the display name for the property.
+		/// 
+		/// If this value is set to null, the <see cref="GetGetColumnNameDefault"/> will be used.
+		/// </summary>
+		[Parameter]
+		public GetColumnNameDelegate GetColumnName
+		{
+			get
+			{
+				if(m_getColumnName == null)
+					return GetColumnNameDefault;
+
+				return m_getColumnName;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_getColumnName)
+					return;
+
+				m_getColumnName = value;
+
+				// Notify subscribers that the property changed.
+				GetColumnNameChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="GetColumnName"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<GetColumnNameDelegate> GetColumnNameChanged
+		{
+			get;
 			set;
 		}
 
@@ -417,6 +620,91 @@ namespace FilterTable
 		}
 
 		/// <summary>
+		/// Implementation used to retrieve the value of a field in a row.
+		/// 
+		/// If this value is set to null, the <see cref="GetPropertyValueDefault"/> will be used.
+		/// </summary>
+		[Parameter]
+		public GetPropertyValueDelegate GetPropertyValue
+		{
+			get
+			{
+				if(m_getPropertyValue == null)
+					return GetPropertyValueDefault;
+
+				return m_getPropertyValue;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_getPropertyValue)
+					return;
+
+				m_getPropertyValue = value;
+
+				// Notify subscribers that the property changed.
+				GetPropertyValueChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="GetPropertyValue"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<GetPropertyValueDelegate> GetPropertyValueChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// Implementation used to retrieve the row style that should be applied to a row.
+		/// 
+		/// If this value is set to null, the <see cref="GetRowStyleDefault"/> will be used.
+		/// </summary>
+		[Parameter]
+		public Func<T, int, string> GetRowClass
+		{
+			get
+			{
+				if(m_getRowClass == null)
+					return GetRowClassDefault;
+
+				return m_getRowClass;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_getRowClass)
+					return;
+
+				m_getRowClass = value;
+
+				// Notify subscribers that the property changed.
+				GetRowStyleChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="GetRowStyle"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<Func<T, int, string>> GetRowStyleChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// Indicates if the CopyToClipboard button is disabled.
+		/// </summary>
+		protected bool CanCopyToClipboard
+		{
+			get; 
+			set;
+		}
+
+		/// <summary>
 		/// Table containing log entries.
 		/// </summary>
 		protected MudTable<T>? Table
@@ -426,13 +714,13 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// Filter operations defined for each DataFilter column.
+		/// Filter operations defined for the added DataFilter columns.
 		/// </summary>
-		protected virtual Dictionary<string, FilterOperation> Filters
+		public virtual List<FilterOperation> FilterOperations
 		{
 			get; 
 			set;
-		} = new Dictionary<string, FilterOperation>();
+		} = new List<FilterOperation>();
 
 		/// <summary>
 		/// Token used to cancel the previous query.
@@ -474,17 +762,19 @@ namespace FilterTable
 		}
 
 		/// <summary>
-		/// References to each DataFilter component.
+		/// List of each DataFilter component.
+		/// 
+		/// The key identifies which <see cref="FilterOperations"/> the DataFilter belongs to.
 		/// </summary>
-		protected Dictionary<string, DataFilter<T>?> DataFilterReferences
+		protected Dictionary<FilterOperation, DataFilter<T>> DataFilters
 		{ 
 			get;
-		} = new Dictionary<string, DataFilter<T>?>();
+		} = new Dictionary<FilterOperation, DataFilter<T>>();
 
 		/// <summary>
 		/// Indicates if <see cref="OnAfterRenderAsync"/> has been called at least once.
 		/// 
-		/// When <see cref="OnAfterRenderAsync"/> has been called, the <see cref="Filters"/> have been updated and any changes made to a filter, 
+		/// When <see cref="OnAfterRenderAsync"/> has been called, the <see cref="FilterOperations"/> have been updated and any changes made to a filter, 
 		/// will cause the TableData to be reloaded, when a <see cref="FilterExpressionChanged"/> is called due to a filter expression being updated.
 		/// </summary>
 		protected bool InitialRenderingComplete
@@ -501,6 +791,33 @@ namespace FilterTable
 			get; 
 			set;
 		} = 50;
+		#endregion
+
+		#region Fields
+		/// <summary>
+		/// Backing field for the <see cref="GetPropertyValue"/> property.
+		/// </summary>
+		private GetPropertyValueDelegate? m_getPropertyValue;
+
+		/// <summary>
+		/// Backing field for the <see cref="GetRowStyle"/> property.
+		/// </summary>
+		private Func<T, int, string> m_getRowClass;
+
+		/// <summary>
+		/// Backing field for the <see cref="SortProperty"/> property.
+		/// </summary>
+		private string? m_sortProperty;
+
+		/// <summary>
+		/// Backing field for the <see cref="SortDirection"/> property.
+		/// </summary>
+		private SortDirection m_sortDirection = SortDirection.Ascending;
+
+		/// <summary>
+		/// Backing field for the <see cref="GetColumnName"/> property.
+		/// </summary>
+		private GetColumnNameDelegate m_getColumnName;
 		#endregion
 	}
 }

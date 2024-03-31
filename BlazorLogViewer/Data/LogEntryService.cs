@@ -99,7 +99,7 @@ namespace BlazorLogViewer.Data
 		/// Query result containing total number of available results, matching the filter, and a list of results not 
 		/// exceeding the number of results specified in <paramref name="maxCount"/>.
 		/// </returns>
-		public async Task<QueryResult<LogEntry>> GetLogEntries(FilterOperation[] filter, string sortLabel="Id", bool sortAscending=true, int skip = 0, int maxCount=100, CancellationToken cancellationToken=default)
+		public async Task<QueryResult<LogEntry>> GetLogEntries(FilterOperationValue[] filter, string sortLabel="Id", bool sortAscending=true, int skip = 0, int maxCount=100, CancellationToken cancellationToken=default)
 		{
 			GetLogEntriesArguments getLogEntriesArguments = new GetLogEntriesArguments(filter, sortLabel ?? nameof(LogEntry.Id), sortAscending, skip, maxCount);
 
@@ -140,9 +140,9 @@ namespace BlazorLogViewer.Data
 			/// <param name="skip">Number of items to skip, in the query result. This is used for paging through a large result set.</param>
 			/// <param name="maxCount">Maximum number of results to retrieve.</param>
 			/// <exception cref="ArgumentNullException">Thrown if the filter is null.</exception>
-			public GetLogEntriesArguments(FilterOperation[] filter, string sortLabel="Id", bool sortAscending=true, int skip=0, int maxCount=100)
+			public GetLogEntriesArguments(FilterOperationValue[] filter, string sortLabel="Id", bool sortAscending=true, int skip=0, int maxCount=100)
 			{
-				Filter			= filter ?? new FilterOperation[0];
+				Filter			= filter ?? new FilterOperationValue[0];
 				SortLabel		= sortLabel;
 				SortAscending	= sortAscending;
 				Skip			= skip;
@@ -152,7 +152,7 @@ namespace BlazorLogViewer.Data
 			/// <summary>
 			/// Filter operations used to filter the list of log entries.
 			/// </summary>
-			public FilterOperation[] Filter {get;set;} = new FilterOperation[0];
+			public FilterOperationValue[] Filter {get;set;} = new FilterOperationValue[0];
 
 			/// <summary>
 			/// Name of the property that the query should be ordered in.

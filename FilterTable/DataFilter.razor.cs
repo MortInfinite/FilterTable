@@ -1,6 +1,4 @@
-﻿using System.Linq.Expressions;
-using System.Reflection;
-using FilterTypes;
+﻿using FilterTypes;
 using Microsoft.AspNetCore.Components;
 
 namespace FilterTable
@@ -38,74 +36,73 @@ namespace FilterTable
 			get; 
 			set;
 		} = new Dictionary<string, object>();
-
 		/// <summary>
-		/// Name of the property that the filter will apply to.
+		/// Filter operation performed or null if no valid filter is specified.
 		/// </summary>
-		/// <exception cref="ArgumentException">Thrown if specifying the name of a property that doesn't exist on type <see cref="T"/>.</exception>
 		[Parameter, EditorRequired]
-		public string FilteredProperty
+		public FilterOperation FilterOperation
 		{
 			get
 			{
-				return m_filteredProperty;
+				return m_filterOperation;
 			}
 			set
 			{
 				// Don't set the property to its current value.
-				if(value == m_filteredProperty)
+				if(value == m_filterOperation)
 					return;
 
-				var filteredPropertyType = GetFilteredPropertyType(value);
-				if(filteredPropertyType == null)
-					throw new ArgumentException($"The property \"{value}\" was not found on the type \"{typeof(T).FullName}\".");
+				// Don't accept null values for filter operations.
+				if(value == null)
+					throw new ArgumentNullException(nameof(FilterOperation));
 
-				m_filteredProperty = value;
+				if(m_filterOperation != null)
+					m_filterOperation.PropertyChanged -= FilterOperation_PropertyChanged;
 
-				FilteredPropertyType = filteredPropertyType;
+				// Retrieve the type of the specified property (Or null if the type isn't found on type T).
+				FilteredPropertyType = GetFilteredPropertyType(value.Property);
 
-				// The FilterOperation property changes, when this property does.
-				FilterOperationChanged.InvokeAsync(FilterOperation);
-			}
-		}
+				m_filterOperation = value;
 
-		/// <summary>
-		/// Defines which filter operation to perform on the data.
-		/// 
-		/// Filter operator defines whether to find a value equal to, greater than or containing the FilterValue.
-		/// </summary>
-		[Parameter]
-		public FilterOperators Operator
-		{
-			get
-			{
-				return m_operator;
-			}
-			set
-			{
-				// Don't set the property to its current value.
-				if(value == m_operator)
-					return;
-
-				m_operator = value;
+				m_filterOperation.PropertyChanged += FilterOperation_PropertyChanged;
 
 				// Notify subscribers that the property changed.
-				OperatorChanged.InvokeAsync(value);
-
-				// The FilterOperation property changes, when this property does.
-				FilterOperationChanged.InvokeAsync(FilterOperation);
+				FilterOperationChanged.InvokeAsync(value);
 			}
 		}
 
 		/// <summary>
-		/// Raises events when the <see cref="Operator"/> property changes.
+		/// Update the <see cref="FilteredPropertyType"/> property, if the <see cref="FilterOperation.Property"/> changes.
+		/// </summary>
+		/// <param name="sender"></param>
+		/// <param name="e"></param>
+		protected virtual void FilterOperation_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+		{
+			switch(e.PropertyName)
+			{
+				case nameof(FilterOperation.Property):
+				{ 
+					// Retrieve the type of the specified property (Or null if the type isn't found on type T).
+					FilteredPropertyType = GetFilteredPropertyType(FilterOperation.Property);
+				}
+				break;
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="FilterOperation"/> property.
 		/// </summary>
 		[Parameter]
-		public EventCallback<FilterOperators> OperatorChanged 
-		{ 
-			get; 
-			set; 
+		public EventCallback<FilterOperation> FilterOperationChanged
+		{
+			get;
+			set;
 		}
+
+		/// <summary>
+		/// Backing field for the <see cref="FilterOperation"/> property.
+		/// </summary>
+		private FilterOperation m_filterOperation = new FilterOperation();
 
 		/// <summary>
 		/// List of operators supported by the <see cref="FilteredProperty"/>.
@@ -133,11 +130,11 @@ namespace FilterTable
 					return false;
 
 				// If no filter is specified.
-				if(string.IsNullOrEmpty(FilterString))
+				if(string.IsNullOrEmpty(FilterOperation.Value))
 					return false;
 
 				// Attempt to parse the filter string.
-				object[]? parsedFilterValues = FilterValueParser.ParseFilterValues(FilteredPropertyType, Operator, FilterString);
+				object[]? parsedFilterValues = FilterValueParser.ParseFilterValues(FilteredPropertyType, FilterOperation.Operator, FilterOperation.Value);
 
 				// If the filter couldn't be parsed.
 				if(parsedFilterValues == null)
@@ -158,38 +155,9 @@ namespace FilterTable
 		{
 			get
 			{ 
-				return string.IsNullOrEmpty(FilterString);
+				return string.IsNullOrEmpty(FilterOperation.Value);
 			}
 		}
-
-		/// <summary>
-		/// Filter string, as it's entered by the user.
-		/// </summary>
-		[Parameter]
-		public string? FilterString
-		{
-			get
-			{
-				return m_filterString;
-			}
-			set
-			{
-				// Don't set the property to its current value.
-				if(value == m_filterString)
-					return;
-
-				m_filterString = value;
-
-				// Notify subscribers that the value changed.
-				FilterStringChanged.InvokeAsync(value);
-
-				// The FilterOperation property changes, when this property does.
-				FilterOperationChanged.InvokeAsync(FilterOperation);
-			}
-		}
-
-		[Parameter]
-		public EventCallback<string> FilterStringChanged { get; set; }
 
 		/// <summary>
 		/// Data type of the <see cref="FilteredProperty"/>.
@@ -211,62 +179,13 @@ namespace FilterTable
 				m_filteredPropertyType = value;
 			}
 		}
-
-		/// <summary>
-		/// Filter operation performed or null if no valid filter is specified.
-		/// </summary>
-		public FilterOperation? FilterOperation
-		{
-			get
-			{
-				// If the filter isn't valid or the filter string isn't specified, don't return a filter operation.
-				if(!FilterValid || FilterString == null)
-					return null;
-
-				return new FilterOperation(FilteredProperty, Operator, FilterString);
-			}
-		}
-
-		/// <summary>
-		/// Raised to indicate that part of the filter has changed.
-		/// 
-		/// This event is used to notify the caller that a new query must be performed, using the updated filter operation.
-		/// </summary>
-		[Parameter]
-		public EventCallback<FilterOperation?> FilterOperationChanged { get; set; }
 		#endregion
 
 		#region Fields
 		/// <summary>
-		/// Backing field for the <see cref="Operator"/> property.
-		/// </summary>
-		private FilterOperators m_operator = FilterOperators.Equals;
-
-		/// <summary>
-		/// Backing field for the <see cref="FilterString"/> property.
-		/// </summary>
-		private string? m_filterString = string.Empty;
-/*
-		/// <summary>
-		/// Backing field for the <see cref="FilterValues"/> property.
-		/// </summary>
-		private object[]? m_filterValues;
-*/
-		/// <summary>
-		/// Backing field for the <see cref="FilteredProperty"/> property.
-		/// </summary>
-		private string m_filteredProperty = null!;
-
-		/// <summary>
 		/// Backing field for the <see cref="FilteredPropertyType"/> property.
 		/// </summary>
 		private Type? m_filteredPropertyType;
-/*
-		/// <summary>
-		/// Backing field for the <see cref="FilterExpression"/> property.
-		/// </summary>
-		private Expression<Func<T, bool>>? m_filterExpression;
-*/
 		#endregion
 	}
 }

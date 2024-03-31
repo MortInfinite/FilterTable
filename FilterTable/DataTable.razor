@@ -2,20 +2,37 @@
 @typeparam T
 @using System.Reflection
 
-<MudTable @ref="Table" T="T" ServerData="@LoadData" Virtualize="false" HeaderClass="table-head-bordered" FixedHeader="true" FixedFooter="true" Breakpoint="Breakpoint.None" Bordered="true" Dense="true" Striped="true" Hover="true" HorizontalScrollbar="true" RowClassFunc="@GetRowStyle" OnRowClick="@OnRowClick" @bind-RowsPerPage="RowsPerPage" @attributes="InputAttributes">
+<MudTable @ref="Table" T="T" ServerData="@LoadData" Virtualize="false" HeaderClass="table-head-bordered" FixedHeader="true" FixedFooter="true" Breakpoint="Breakpoint.None" Bordered="true" Dense="true" Striped="true" Hover="true" HorizontalScrollbar="true" RowClassFunc="@GetRowClass" OnRowClick="@OnRowClick" @bind-RowsPerPage="RowsPerPage" @attributes="InputAttributes">
 	<ColGroup>
 		@foreach(var property in Properties)
 		{
-			<col style="width: 60px;"/>
+			<col style="width: 60px;" />
 		}
 	</ColGroup>
 	<HeaderContent>
 		@foreach(PropertyInfo property in Properties)
 		{
-			<MudTh>
-				<MudTableSortLabel SortLabel="@property.Name" T="T">@property.Name</MudTableSortLabel>
-				<div class="DataFilter">
-					<DataFilter @ref="@DataFilterReferences[@property.Name]" T="T" FilteredProperty="@property.Name" FilterOperationChanged="@((FilterOperation? expression)=>FilterOperationChanged(@property.Name, expression))" Operator="@DataFilterOperators[property.Name]" OperatorChanged="@((newValue) => UpdateDataFilterOperator(property.Name, newValue))" FilterString="@DataFilterValues[property.Name]" FilterStringChanged="@((newValue) => UpdateDataFilterValue(property.Name, newValue))" />
+			<MudTh class="data-table-header">
+				<div>
+					@if(string.Equals(property.Name, SortProperty, StringComparison.InvariantCultureIgnoreCase))
+					{
+						<MudTableSortLabel T="T" SortLabel="@property.Name" InitialDirection="SortDirection">@GetColumnName(property)</MudTableSortLabel>
+					}
+					else
+					{
+						<MudTableSortLabel T="T" SortLabel="@property.Name">@GetColumnName(property)</MudTableSortLabel>
+					}
+					<div class="data-table-header-column">
+						<div class="data-filter">
+							@foreach(FilterOperation filterOperation in FilterOperations)
+							{
+								if(filterOperation.Property == property.Name)
+								{
+									<DataFilter @ref="@DataFilters[filterOperation]" T="T" FilterOperation="filterOperation"/>
+								}
+							}
+						</div>
+					</div>
 				</div>
 			</MudTh>
 		}
@@ -28,7 +45,7 @@
 	</RowTemplate>
 	<PagerContent>
 		<MudButton OnClick="CopyToClipboard" Disabled="!CanCopyToClipboard">Copy page</MudButton>
-		@if (SelectedItems.Count > 0)
+		@if(SelectedItems.Count > 0)
 		{
 			<MudButton OnClick="CopySelectionToClipboard" Disabled="!CanCopyToClipboard">Copy selected</MudButton>
 		}

@@ -60,7 +60,7 @@ namespace FilterDataAccess
 		/// exceeding the number of results specified in <paramref name="maxCount"/>.
 		/// </returns>
 		/// <exception cref="ArgumentException">Thrown if the <paramref name="filter"/> contains invalid arguments.</exception>
-		public Task<QueryResult<TValue>> GetFilteredValues(FilterOperation[] filter, string sortLabel="Id", bool sortAscending=true, int skip = 0, int maxCount=100, CancellationToken cancellationToken=default)
+		public Task<QueryResult<TValue>> GetFilteredValues(FilterOperationValue[] filter, string sortLabel="Id", bool sortAscending=true, int skip = 0, int maxCount=100, CancellationToken cancellationToken=default)
 		{
 			ExpressionGenerator<TValue> expressionGenerator = new ExpressionGenerator<TValue>();
 

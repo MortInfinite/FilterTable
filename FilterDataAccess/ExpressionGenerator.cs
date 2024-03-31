@@ -5,7 +5,7 @@ using System.Reflection;
 namespace FilterDataAccess
 {
 	/// <summary>
-	/// Provides a method used to generate an expression, matching a <see cref="FilterOperation"/>.
+	/// Provides a method used to generate an expression, matching a <see cref="FilterOperationValue"/>.
 	/// </summary>
 	/// <typeparam name="T">Type that is being filtered on, in the generated expression.</typeparam>
 	public class ExpressionGenerator<T>
@@ -30,7 +30,7 @@ namespace FilterDataAccess
 		/// MyArrayOfValues.AsQueryable().Where(expression);
 		/// </example>
 		/// <exception cref="ArgumentException">Thrown if the <paramref name="filterOperation"/> contains invalid arguments.</exception>
-		public virtual Expression<Func<T, bool>> GenerateFilterExpression(FilterOperation filterOperation)
+		public virtual Expression<Func<T, bool>> GenerateFilterExpression(FilterOperationValue filterOperation)
 		{ 
 			// Determine if the specified property exists.
 			bool exists = PropertyTypes.TryGetValue(filterOperation.Property, out Type? propertyType);

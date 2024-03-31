@@ -3,6 +3,7 @@
     "BlazorLogViewer.WASM": {
       "commandName": "Project",
       "launchBrowser": true,
+      "launchUrl": "logentriestable",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
