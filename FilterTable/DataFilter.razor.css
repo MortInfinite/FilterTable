@@ -1,0 +1,10 @@
+﻿div.data-filter {
+}
+
+::deep .column-filter {
+	border-bottom-width: 1px;
+	border-color: #DADADA;
+	min-width: 5em;
+	width: calc(100% - 26px);
+}
+

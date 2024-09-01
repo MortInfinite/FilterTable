@@ -7,6 +7,11 @@ using FilterTable;
 using LogData;
 using FilterTypes;
 using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
+using System;
+using System.Globalization;
+using System.Runtime.Serialization;
 
 namespace BlazorLogViewer.Pages
 {
@@ -27,7 +32,7 @@ namespace BlazorLogViewer.Pages
 		{
 			await base.OnAfterRenderAsync(firstRender);
 
-			await Ping(CancellationToken.None);
+			//await Ping(CancellationToken.None);
 
 			// Set default values on the table.
 			// Unfortunately this can't be done on the razor page, it has to be done in code behind.
@@ -36,10 +41,10 @@ namespace BlazorLogViewer.Pages
 				Table.DefaultDataFilterOperators	[nameof(LogEntry.TimeStamp)]	= FilterOperators.GreaterThanOrEqual;
 				Table.DefaultDataFilterValues		[nameof(LogEntry.TimeStamp)]	= Configuration["TimeSpan"] ?? "-1";
 			}
-
-			// Copy query string parameters to the table's DataFilterOperators and DataFilterValues.
+			
+			// Copy query string parameters to the table's filters.
 			GetPropertiesFromQueryString();
-
+			
 			InitialRenderingComplete = true;
 		}
 
@@ -109,7 +114,7 @@ namespace BlazorLogViewer.Pages
 		}
 
 		/// <summary>
-		/// Changes the format of date time values.
+		/// Changes the format of date time values, displayed in the table.
 		/// </summary>
 		/// <param name="context">Object from which to retrieve the value of the <paramref name="property"/>.</param>
 		/// <param name="property">Property to retrieve from the <paramref name="context"/>.</param>
@@ -120,11 +125,13 @@ namespace BlazorLogViewer.Pages
 			if(value == null)
 				return null;
 
-			if(property.PropertyType.IsAssignableFrom(typeof(DateTime)) && DateTime.TryParse(value.ToString(), out DateTime parsedDateTime))
-			{
-				string result = parsedDateTime.ToString("dd-MM-yyyy HH:mm:ss");
-				return result;
-			}
+			// Format dates.
+			if(value is DateTime dateTimeValue)
+				return dateTimeValue.ToString(DateTimeFormat, CultureInfo.InvariantCulture);
+
+			// Format durations.
+			if(value is TimeSpan timeSpanValue)
+				return timeSpanValue.ToString(TimeSpanFormat, CultureInfo.InvariantCulture);
 
 			return value;
 		}
@@ -133,23 +140,10 @@ namespace BlazorLogViewer.Pages
 		/// Updates the navigation manager query filter, when a data filter operator changes.
 		/// </summary>
 		/// <param name="propertyName">Name of the data filter operator that changed.</param>
-		protected void DataFilterOperatorChanged(string propertyName)
+		/// <param name="filterOperationChangedArgs">Information about how the filter operation changed.</param>
+		protected void FilterOperationChanged(DataTable<LogEntry>.FilterOperationChangedArgs filterOperationChangedArgs)
 		{ 
 			// Don't update the query string, if the DataFilterOperator was changed while reading the query string.
-			if(UpdatingPropertiesFromQueryString)
-				return;
-
-			// Update the navigation manager query filter
-			SetQueryStringFromProperties();
-		}
-
-		/// <summary>
-		/// Updates the navigation manager query filter, when a data filter value changes.
-		/// </summary>
-		/// <param name="propertyName">Name of the data filter value that changed.</param>
-		protected void DataFilterValueChanged(string propertyName)
-		{ 
-			// Don't update the query string, if the DataFilterValue was changed while reading the query string.
 			if(UpdatingPropertiesFromQueryString)
 				return;
 
@@ -173,34 +167,47 @@ namespace BlazorLogViewer.Pages
 				// instead of calling SetQueryStringFromProperties to update the query string due to the properties changing.
 				UpdatingPropertiesFromQueryString = true;
 
-				bool modified = false;
-				foreach(PropertyInfo property in Table.Properties)
-				{ 
-					string? defaultValue = Table.DefaultDataFilterValues.GetValueOrDefault(property.Name, null);
-					string? currentValue = Table.DataFilterValues[property.Name];
+				// Extract each key/value pair from the query string.
+				IList<KeyValuePair<string, string>> queryStringParts = NavigationManager.GetQueryString();
 
-					// Retrieve the filter value from the query string and check if the query string filter value differs from the current filter value.
-					string? newValue = NavigationManager.TryGetQueryString<string>(property.Name+"_V", defaultValue);
-					if(newValue != currentValue)
-					{
-						Table.DataFilterValues[property.Name] = newValue;
-						modified = true;
+				List<FilterOperation> filterOperations = new List<FilterOperation>();
+				FilterOperation? currentFilterOperation = null;
+
+				// Parse each part of the query string, adding filters for each specified filter operation.
+				foreach(KeyValuePair<string, string> queryStringPart in queryStringParts)
+				{
+					// If the current query string part is the value of a property.
+					if(queryStringPart.Key.EndsWith("_V"))
+					{ 
+						currentFilterOperation			= new FilterOperation();
+						currentFilterOperation.Property = queryStringPart.Key.Substring(0, queryStringPart.Key.Length-2);
+						currentFilterOperation.Value	= queryStringPart.Value;
+						continue;
 					}
 
-					FilterOperators defaultOperator = Table.DefaultDataFilterOperators.GetValueOrDefault(property.Name, FilterOperators.Equals);
-					FilterOperators currentOperator = Table.DataFilterOperators[property.Name];
-
-					// Retrieve the filter value from the query string and check if the query string filter operator differs from the current filter operator.
-					FilterOperators newOperator = NavigationManager.TryGetQueryString(property.Name+"_O", defaultOperator);
-					if(newOperator != currentOperator)
+					// If the current query string element is the operator of the previously specified property.
+					if(queryStringPart.Key.EndsWith("_O") && queryStringPart.Key.Substring(0, queryStringPart.Key.Length-2) == currentFilterOperation?.Property)
 					{ 
-						Table.DataFilterOperators[property.Name] = newOperator;
-						modified = true;
+						// If the filter operator is valid, create a filter operation matching the filter.
+						if(Enum.TryParse<FilterOperators>(queryStringPart.Value, out var filterOperator))
+						{
+							currentFilterOperation.Operator = filterOperator;
+							filterOperations.Add(currentFilterOperation);
+						}
+
+						currentFilterOperation = null;
+
+						continue;
 					}
 				}
 
-				if(modified)
-					StateHasChanged();
+				// Determine if the generated list of filters match the filters that already exist.
+				bool filtersIdentical = filterOperations.All(newFilterOperation => Table.FilterOperations.Any(existingFilterOperation => newFilterOperation.Equals(existingFilterOperation))) && filterOperations.Count == Table.FilterOperations.Count;
+				if(filtersIdentical)
+					return;
+
+				// Replace the set of filters to use.
+				Table.ReplaceFilters(filterOperations);
 			}
 			finally
 			{ 
@@ -216,26 +223,15 @@ namespace BlazorLogViewer.Pages
 			if(NavigationManager == null || Table == null)
 				return;
 
-			List<KeyValuePair<string, string?>> nameValuePairs = new List<KeyValuePair<string, string?>>();
+			List<KeyValuePair<string, string>> nameValuePairs = new List<KeyValuePair<string, string>>();
 
-			// Add each property value and property operator to the query string, unless they contain default values.
-			foreach(PropertyInfo property in Table.Properties)
+			foreach(var filterOperation in Table.FilterOperations)
 			{ 
-				// Add the property value, if it differs from the default value.
-				string? value = Table.DataFilterValues[property.Name];
-				string? defaultValue = Table.DefaultDataFilterValues.GetValueOrDefault(property.Name);
-				if(value != defaultValue)
-					nameValuePairs.Add(new KeyValuePair<string, string?>(property.Name+"_V", value));
-				else
-					nameValuePairs.Add(new KeyValuePair<string, string?>(property.Name+"_V", null));
-
-				// Add the property filter operator, if it differs from the default value.
-				FilterOperators filterOperator = Table.DataFilterOperators[property.Name];
-				FilterOperators defaultFilterOperator = Table.DefaultDataFilterOperators.GetValueOrDefault(property.Name);
-				if(filterOperator != defaultFilterOperator)
-					nameValuePairs.Add(new KeyValuePair<string, string?>(property.Name+"_O", filterOperator.ToString()));
-				else
-					nameValuePairs.Add(new KeyValuePair<string, string?>(property.Name+"_O", null));
+				if(!string.IsNullOrEmpty(filterOperation.Value))
+				{
+					nameValuePairs.Add(new KeyValuePair<string, string>(filterOperation.Property+"_V", filterOperation.Value));
+					nameValuePairs.Add(new KeyValuePair<string, string>(filterOperation.Property+"_O", filterOperation.Operator.ToString()));
+				}
 			}
 
 			NavigationManager.SetQueryString(nameValuePairs);
@@ -248,6 +244,7 @@ namespace BlazorLogViewer.Pages
 		/// </summary>
 		protected virtual void NavigationManager_LocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
 		{
+			// Copy query string parameters to the table's filters.
 			GetPropertiesFromQueryString();
 		}
 		#endregion
@@ -330,6 +327,24 @@ namespace BlazorLogViewer.Pages
 			get;
 			set;
 		}
+
+		/// <summary>
+		/// Format string used to format <see cref="DateTime"/> values shown in the table.
+		/// </summary>
+		public string DateTimeFormat
+		{
+			get; 
+			set;
+		} = "yyyy-MM-dd hh:mm:ss.ffff";
+
+		/// <summary>
+		/// Format string used to format <see cref="TimeSpan"/> values shown in the table.
+		/// </summary>
+		public string TimeSpanFormat
+		{
+			get; 
+			set;
+		} = "-d hh:mm:ss.ffff";
 		#endregion
 	}
 }

@@ -32,19 +32,24 @@ namespace LogEntryDataAccess
 							.AddJsonOptions(options => { options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()); })
 							.ConfigureApiBehaviorOptions(options =>
 							{
-								options.SuppressModelStateInvalidFilter                 = true;
+								options.SuppressModelStateInvalidFilter = true;
 							});
-
+			
 			// Add support for authentication.
 			builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
 							.AddNegotiate();
 
-			// Add permission control.
-			builder.Services.AddAuthorization(options =>
+			// Determine if the appsettings has a DisableAuthentication: "true" value, for used while developing.
+			bool.TryParse(builder.Configuration["DisableAuthentication"], out bool disableAuthentication);
+			if(!disableAuthentication)
 			{
-				// By default, all incoming requests will be authorized according to the default policy.
-				options.FallbackPolicy = options.DefaultPolicy;
-			});
+				// Add permission control.
+				builder.Services.AddAuthorization(options =>
+				{
+					// By default, all incoming requests will be authorized according to the default policy.
+					options.FallbackPolicy = options.DefaultPolicy;
+				});
+			}
 
 			// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 			builder.Services.AddEndpointsApiExplorer();

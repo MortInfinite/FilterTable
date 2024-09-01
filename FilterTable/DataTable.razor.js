@@ -73,7 +73,7 @@ function removeFiltersFromTable(html)
 {
 	var element = htmlToElement(html);
 
-	var filterElements = element.querySelectorAll('div.DataFilter')
+	var filterElements = element.querySelectorAll('div.data-filter')
 	for (var count=0; count<filterElements.length; count++) 
 	{
 		var filterElement = filterElements[count];

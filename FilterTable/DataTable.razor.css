@@ -1,0 +1,35 @@
+﻿::deep .nowrap {
+	white-space: nowrap;
+}
+
+::deep td.less-padding {
+	padding: 2px 16px 2px 16px;
+}
+
+::deep select.no-arrow {
+	appearance: none;
+}
+
+::deep tr.selected {
+	background-color: #1E88E5 !important;
+}
+
+::deep tr.selected > td {
+	color: white !important;
+}
+
+::deep tr.selected > td .mud-input {
+	color: white !important;
+}
+
+/* Prevent selection of text */
+::deep .noselect {
+  -webkit-user-select: none; 
+  -ms-user-select: none;
+  user-select: none;		
+}
+
+/* Revert the scrollbar width */
+::deep div.mud-table-container {
+	scrollbar-width: auto;
+}

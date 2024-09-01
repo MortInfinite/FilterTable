@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Components;
 using System.Reflection;
 using Microsoft.JSInterop;
 using FilterTypes;
-using System.Linq;
+using System.ComponentModel;
 
 namespace FilterTable
 {
@@ -66,6 +66,78 @@ namespace FilterTable
 		/// <param name="property">Property for which to retrieve the column name.</param>
 		/// <returns>Name of the column.</returns>
 		public delegate string GetColumnNameDelegate(PropertyInfo property);
+
+		/// <summary>
+		/// Describes a changed filter operation.
+		/// </summary>
+		public struct FilterOperationChangedArgs
+		{ 
+			/// <summary>
+			/// Create a new <see cref="FilterOperationChangedArgs"/>.
+			/// </summary>
+			/// <param name="filterOperation">Filter operation that changed.</param>
+			/// <param name="changedAction">Action describing the kind of change that occurred on the filter operation.</param>
+			/// <param name="propertyName">Name of the property that changed or null if action doesn't indicate a property change.</param>
+			public FilterOperationChangedArgs(FilterOperation filterOperation, ChangedAction changedAction, string? propertyName)
+			{ 
+				FilterOperation = filterOperation;
+				ChangedAction = changedAction;
+				PropertyName = propertyName;
+			}
+
+			/// <summary>
+			/// Filter operation that changed.
+			/// </summary>
+			public FilterOperation FilterOperation
+			{
+				get;
+				set;
+			}
+			
+			/// <summary>
+			/// Action describing the kind of change that occurred on the filter operation.
+			/// </summary>
+			public ChangedAction ChangedAction
+			{
+				get;
+				set;
+			}
+				
+			/// <summary>
+			/// Name of the property that changed or null if action doesn't indicate a property change.
+			/// </summary>
+			public string? PropertyName
+			{
+				get;
+				set;
+			}
+		}
+
+		/// <summary>
+		/// Indicates in which way an element has changed.
+		/// </summary>
+		public enum ChangedAction
+		{
+			/// <summary>
+			/// No change occurred.
+			/// </summary>
+			None = 0,
+
+			/// <summary>
+			/// The specified element was added to the collection.
+			/// </summary>
+			Added,
+
+			/// <summary>
+			/// The specified element was removed from the collection.
+			/// </summary>
+			Removed,
+
+			/// <summary>
+			/// The specified element was modified.
+			/// </summary>
+			Modified
+		}
 		#endregion
 
 		#region Methods
@@ -76,7 +148,7 @@ namespace FilterTable
 		public virtual async Task Reload()
 		{ 
 			if(Table == null)
-				return;
+				throw new InvalidOperationException($"Unable to reload server data, the {nameof(Table)} property hasn't been initialized yet.");
 
 			await Table.ReloadServerData();
 		}
@@ -124,26 +196,8 @@ namespace FilterTable
 		{
 			Properties = typeof(T).GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
-			Dictionary<string, FilterOperators> dataFilterOperators = new Dictionary<string, FilterOperators>();
-			Dictionary<string, string?>			dataFilterValues	= new Dictionary<string, string?>();
-
-			foreach(PropertyInfo property in Properties)
-			{
-				// Retrieve the initial values to use for each data filter.
-				FilterOperators	filterOperator	= DefaultDataFilterOperators.GetValueOrDefault(property.Name, FilterOperators.Equals);
-				string?			filterValue		= DefaultDataFilterValues.GetValueOrDefault(property.Name, null);
-
-				dataFilterOperators.Add(property.Name, filterOperator);
-				dataFilterValues.Add(property.Name, filterValue);
-			}
-
-			DataFilterOperators = dataFilterOperators;
-			DataFilterValues	= dataFilterValues;
-
-			// Add a new empty data filter at the end of non-empty filters.
-			// Remove any empty filters, except for the last one.
-			foreach(var property in Properties)
-				AddFilter(property.Name, DefaultDataFilterValues.GetValueOrDefault(property.Name, string.Empty)!);
+			// Create empty filters to match each property.
+			CreateEmptyFilters();
 		}
 
 		/// <summary>
@@ -156,29 +210,7 @@ namespace FilterTable
 			await base.OnAfterRenderAsync(firstRender);
 
 			if(!InitialRenderingComplete)
-			{
-				// Copy the initial data filter operator values to the data filter operators.
-				foreach(KeyValuePair<string, FilterOperators> initialDataFilterOperators in DefaultDataFilterOperators)
-					if(DataFilterOperators.ContainsKey(initialDataFilterOperators.Key))
-						DataFilterOperators[initialDataFilterOperators.Key] = initialDataFilterOperators.Value;
-
-				// Copy the initial data filter values to the data filter values.
-				foreach(KeyValuePair<string, string?> initialDataFilterValue in DefaultDataFilterValues)
-					if(DataFilterValues.ContainsKey(initialDataFilterValue.Key))
-						DataFilterValues[initialDataFilterValue.Key] = initialDataFilterValue.Value;
-
-				// Update the expression filters defined for each DataFilter column.
-				UpdateFilters();
-
 				InitialRenderingComplete = true;
-			}
-		}
-
-		/// <summary>
-		/// Updates the expression filters defined for each DataFilter column.
-		/// </summary>
-		protected virtual void UpdateFilters()
-		{ 
 		}
 
 		/// <summary>
@@ -203,9 +235,9 @@ namespace FilterTable
 				CanCopyToClipboard = false;
 
 				// Retrieve those of the filters that have a filter value.
-				FilterOperationValue[] filters = FilterOperations	.Where(currentFilter => !string.IsNullOrEmpty(currentFilter.Value))
-													.Select(currentFilter => (FilterOperationValue) currentFilter)
-													.ToArray();
+				FilterOperationValue[] filters = FilterOperationsProtected	.Where(currentFilter => !string.IsNullOrEmpty(currentFilter.Value))
+																			.Select(currentFilter => (FilterOperationValue) currentFilter)
+																			.ToArray();
 
 				DataTable<T>.FilteredResult filteredResult = await GetData(filters, state.SortLabel, state.SortDirection == SortDirection.Ascending, state.Page * state.PageSize, state.PageSize, default);
 
@@ -223,6 +255,11 @@ namespace FilterTable
 				// Enable the copy to clipboard button, if the table contains any results.
 				if(tableData.Items?.Any() ?? false)
 					CanCopyToClipboard = true;
+
+				// Clear currently selected items, before returning new results.
+				// This is neccessary because the hash values of the old items don't match the hash values of the newly loaded values.
+				SelectedItems.Clear();
+				LastSelectedItem = default(T);
 			}
 
 			return tableData;
@@ -232,115 +269,170 @@ namespace FilterTable
 		/// Add a new filter to the specified property.
 		/// </summary>
 		/// <param name="propertyName">Name of the property to apply the filter to.</param>
-		/// <param name="value">Initial value to set for the added filter.</param>
-		protected virtual void AddFilter(string propertyName, string? value=null)
+		/// <param name="operator">Operator to apply to the property or null to use the default operator for that property.</param>
+		/// <param name="value">Initial value to set for the added filter or null to use an empty string.</param>
+		public virtual void AddFilter(string propertyName, FilterOperators? @operator=null, string? value=null)
 		{ 
 			FilterOperation filterOperation = new FilterOperation()
 			{
 				Property	= propertyName,
-				Operator	= DefaultDataFilterOperators.GetValueOrDefault(propertyName, FilterOperators.Equals),
+				Operator	= @operator ?? DefaultDataFilterOperators.GetValueOrDefault(propertyName, FilterOperators.Equals),
 				Value		= value	?? string.Empty
 			};
 
 			// When the filter operation changes, reload the server data and ensure that an empty filter exists for each property.
 			filterOperation.PropertyChanged += FilterOperation_PropertyChanged;
 
-			//Filters.Add(filterOperation);
-			FilterOperations.Insert(0, filterOperation);
+			FilterOperationsProtected.Insert(0, filterOperation);
 
 			// Update the UI.
 			StateHasChanged();
+
+			// Notify subscribers about the filter operation that was added.
+			FilterOperationChanged.InvokeAsync(new FilterOperationChangedArgs(filterOperation, ChangedAction.Added, null));
+
+			// Reload the server data, now that filters changed.
+			if(Table != null)
+				_ = Table.ReloadServerData();
 		}
 
 		/// <summary>
 		/// Remove an existing filter and unsubscribe from its change events.
 		/// </summary>
 		/// <param name="filterOperation">Filter to remove.</param>
-		/// <returns>Returns true if the filter was removed or false if the filter did not exist in the list of <see cref="FilterOperations"/>.</returns>
-		protected virtual bool RemoveFilter(FilterOperation filterOperation)
+		/// <returns>Returns true if the filter was removed or false if the filter did not exist in the list of <see cref="FilterOperationsProtected"/>.</returns>
+		public virtual bool RemoveFilter(FilterOperation filterOperation)
 		{ 
-			bool exists = FilterOperations.Remove(filterOperation);
+			bool exists = FilterOperationsProtected.Remove(filterOperation);
 			if(!exists)
 				return false;
 
 			// Unsubscribe from the removed filter's change events.
 			filterOperation.PropertyChanged -= FilterOperation_PropertyChanged;
 
+			// Update the UI.
+			StateHasChanged();
+
+			// Notify subscribers about the filter operation that was removed.
+			FilterOperationChanged.InvokeAsync(new FilterOperationChangedArgs(filterOperation, ChangedAction.Removed, null));
+
+			// Reload the server data, now that filters changed.
+			if(Table != null)
+				_ = Table.ReloadServerData();
+
 			return true;
+		}
+
+		/// <summary>
+		/// Remove all filters, excep empty filters used to enter new values.
+		/// </summary>
+		public virtual void ClearFilters()
+		{ 
+			// Remove all non-empty filters.
+			var nonEmptyFilters = FilterOperationsProtected.Where(filter => !string.IsNullOrEmpty(filter.Value)).ToArray();
+			foreach(var nonEmptyFilter in nonEmptyFilters)
+				RemoveFilter(nonEmptyFilter);
+		}
+
+		/// <summary>
+		/// Clear the existing filters and add a new set of filters.
+		/// </summary>
+		/// <param name="filtersToAdd">Filters to add, after clearing the list of filters.</param>
+		public virtual void ReplaceFilters(IEnumerable<FilterOperation> filtersToAdd)
+		{ 
+			// Remove all non-empty filters.
+			var nonEmptyFilters = FilterOperationsProtected.Where(filter => !string.IsNullOrEmpty(filter.Value)).ToArray();
+			foreach(var nonEmptyFilter in nonEmptyFilters)
+				RemoveFilter(nonEmptyFilter);
+
+			foreach(var filterToAdd in filtersToAdd)
+				AddFilter(filterToAdd.Property, filterToAdd.Operator, filterToAdd.Value);
+		}
+
+		/// <summary>
+		/// Create an empty <see cref="FilterOperation"/> for each property in <see cref="Properties"/>.
+		/// </summary>
+		protected virtual void CreateEmptyFilters()
+		{ 
+			// Remove existing empty filters, before adding new filters.
+			foreach(KeyValuePair<string, FilterOperation> emptyFilter in EmptyFilters)
+				emptyFilter.Value.PropertyChanged -= EmptyFilter_PropertyChanged;
+
+			EmptyFilters.Clear();
+
+			foreach(PropertyInfo property in Properties)
+			{
+				FilterOperators defaultOperator = DefaultDataFilterOperators.GetValueOrDefault(property.Name, FilterOperators.Equals);
+				FilterOperation filterOperation = new FilterOperation(property.Name, defaultOperator, string.Empty);
+				filterOperation.PropertyChanged += EmptyFilter_PropertyChanged;
+
+				EmptyFilters.Add(property.Name, filterOperation);
+			}
 		}
 
 		/// <summary>
 		/// Add the clicked item to the list of selected items.
 		/// </summary>
 		/// <param name="args">Click event, containing the selected argument.</param>
-		protected virtual void OnRowClick(TableRowClickEventArgs<T> args)
+		protected virtual async Task OnRowClick(TableRowClickEventArgs<T> args)
 		{
-			bool addItem = !SelectedItems.Contains(args.Item);
-			if(addItem)
-				SelectedItems.Add(args.Item);
+			// Don't respond to the row being clicked, if text selection is enabled.
+			if(TextSelectionEnabled)
+				return;
+
+			// If the shift key is pressed, select a range of items, instead of only selecting the clicked item.
+			if(Table != null && LastSelectedItem != null && args.MouseEventArgs.ShiftKey)
+			{
+				List<T> filteredItems = Table.FilteredItems.ToList();
+				int lastSelectedItemIndex = filteredItems.IndexOf(LastSelectedItem);
+				int newlySelectedItemIndex = filteredItems.IndexOf(args.Item);
+
+				// If an item was previously selected, such that it is possible to select a range of items.
+				if(lastSelectedItemIndex >= 0 && newlySelectedItemIndex >= 0)
+				{ 
+					// Ensure that the lastSelectedItemIndex comes before the newlySelectedItemIndex.
+					if(lastSelectedItemIndex > newlySelectedItemIndex)
+					{
+						int swapValue = lastSelectedItemIndex;
+						lastSelectedItemIndex = newlySelectedItemIndex;
+						newlySelectedItemIndex = swapValue;
+					}
+
+					// Select or unselect the range of items.
+					for(int count=lastSelectedItemIndex; count<=newlySelectedItemIndex; count++)
+					{
+						if(SelectingRange)
+							SelectedItems.Add(filteredItems[count]);
+						else
+							SelectedItems.Remove(filteredItems[count]);
+					}
+				}
+			}
 			else
-				SelectedItems.Remove(args.Item);
+			{
+				// If the clicked item wasn't found in the list of SelectedItems, add it now. 
+				// If the clicked item was found in the list of SelectedItems, remove it instead.
+				bool addItem = !SelectedItems.Contains(args.Item);
+				if(addItem)
+					SelectedItems.Add(args.Item);
+				else
+					SelectedItems.Remove(args.Item);
+
+				// Remember whether the user is starting to select a range, because the selected item was previously unselected,
+				// or is deselecting a range, because the selected item was previously unselected.
+				SelectingRange = addItem;
+			}
+
+			// Remember which item was just selected or deselected.
+			// This is used to determine which range to select, when holding down Shift to perform a range selection.
+			LastSelectedItem = args.Item;
+
+			// Notify subscribers that the list of selected items has changed.
+			await SelectedItemsChanged.InvokeAsync();
 		}
 		#endregion
 
 		#region Event handlers
-
-		/// <summary>
-		/// Ensure that exactly one empty filter exists, per property.
-		/// </summary>
-		protected virtual void EnsureSingleEmptyFilterPerProperty()
-		{ 
-			foreach(PropertyInfo property in Properties)
-			{
-				string propertyName = property.Name;
-				propertyName .ToString();
-
-				FilterOperation[] filtersMatchingProperty = FilterOperations.Where(filter => filter.Property == property.Name).ToArray();
-				FilterOperation[] emptyFilters = filtersMatchingProperty.Where(filter => string.IsNullOrEmpty(filter.Value)).ToArray();
-
-				emptyFilters.ToString();
-
-				if(emptyFilters.Length < 1)
-				{
-					// If no empty filters exist, add one now.
-					AddFilter(property.Name);
-				}
-				else if(emptyFilters.Length > 1)
-				{
-					// Remove all empty filters, except the last one.
-					IEnumerable<FilterOperation> filtersToRemove = emptyFilters.TakeLast(emptyFilters.Length-1).ToArray();
-					foreach(FilterOperation filterToRemove in filtersToRemove)
-						RemoveFilter(filterToRemove);
-				}
-			}
-		}
-
-		/// <summary>
-		/// Updates the <see cref="DataFilterOperators"/> and calls the <see cref="DataFilterOperatorChanged"/> event callback.
-		/// </summary>
-		/// <param name="property">Name of the property that changed.</param>
-		/// <param name="newValue">New value of the property.</param>
-		/// <returns>Created task.</returns>
-		protected async Task UpdateDataFilterOperator(string property, FilterOperators newValue)
-		{ 
-			DataFilterOperators[property] = newValue;
-
-			await DataFilterOperatorChanged.InvokeAsync(property);
-		}
-
-		/// <summary>
-		/// Updates the <see cref="DataFilterValues"/> and calls the <see cref="DataFilterValuesChanged"/> event callback.
-		/// </summary>
-		/// <param name="property">Name of the property that changed.</param>
-		/// <param name="newValue">New value of the property.</param>
-		/// <returns>Created task.</returns>
-		protected async Task UpdateDataFilterValue(string property, string? newValue)
-		{ 
-			DataFilterValues[property] = newValue;
-
-			await DataFilterValueChanged.InvokeAsync(property);
-		}
-
 		/// <summary>
 		/// Copy the table to the clipboard.
 		/// </summary>
@@ -401,17 +493,44 @@ namespace FilterTable
 			if(!InitialRenderingComplete)
 				return;
 
-			Task.Run(async ()=>
+			// Notify subscribers about the filter operation that was modified.
+			if(sender is FilterOperation filterOperation)
 			{
-				// Add a new empty data filter at the end of non-empty filters.
-				// Remove any empty filters, except for the last one.
-				EnsureSingleEmptyFilterPerProperty();
+				// If the filter is empty, remove the filter and don't notify subscribers about its property changing.
+				// (Removing the filter will notify subscribers that the list of filters has changed)
+				if(string.IsNullOrEmpty(filterOperation.Value))
+				{
+					RemoveFilter(filterOperation);
+					return;
+				}
 
-				// Ask the data table to request new data to be loaded, by calling the LoadData method.
-				if(Table != null)
-					await Table.ReloadServerData();
-			});
+				FilterOperationChanged.InvokeAsync(new FilterOperationChangedArgs(filterOperation, ChangedAction.Modified, e.PropertyName));
+			}
+
+			// Ask the data table to request new data to be loaded, by calling the LoadData method.
+			if(Table != null)
+				_ = Table.ReloadServerData();
 		}
+
+		/// <summary>
+		/// Copy the empty filter value to a new FilterOperation, when its value changes to a non-empty value.
+		/// </summary>
+		/// <param name="sender">Empty <see cref="FilterOperation"/> that changed.</param>
+		/// <param name="e">Name of the property that changed, in that <see cref="FilterOperation"/>.</param>
+		protected virtual void EmptyFilter_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+		{
+			// If the value of the filter operation changed.
+			if(sender is FilterOperation filterOperation && e.PropertyName == nameof(FilterOperation.Value) && !string.IsNullOrEmpty(filterOperation.Value))
+			{ 
+				// Copy the empty filter to a new filter.
+				AddFilter(filterOperation.Property, filterOperation.Operator, filterOperation.Value);
+
+				// Clear the value of the empty filter, so it can be reused.
+				filterOperation.Operator = DefaultDataFilterOperators.GetValueOrDefault(filterOperation.Property, FilterOperators.Equals);;
+				filterOperation.Value = string.Empty;
+			}
+		}
+
 		#endregion
 
 		#region Properties
@@ -540,6 +659,16 @@ namespace FilterTable
 		}
 
 		/// <summary>
+		/// Raises events when a filter operation is added, removed or modified.
+		/// </summary>
+		[Parameter]
+		public EventCallback<FilterOperationChangedArgs> FilterOperationChanged
+		{ 
+			get; 
+			set; 
+		}
+
+		/// <summary>
 		/// Public properties to display, for type <see cref="T"/>.
 		/// </summary>
 		public PropertyInfo[] Properties
@@ -547,24 +676,6 @@ namespace FilterTable
 			get;
 			protected set;
 		}
-
-		/// <summary>
-		/// Filter operators for each DataFilter.
-		/// </summary>
-		public Dictionary<string, FilterOperators> DataFilterOperators
-		{ 
-			get;
-			protected set;
-		} = new Dictionary<string, FilterOperators>();
-
-		/// <summary>
-		/// Filter values for each DataFilter.
-		/// </summary>
-		public Dictionary<string, string?> DataFilterValues
-		{ 
-			get;
-			protected set;
-		} = new Dictionary<string, string?> ();
 
 		/// <summary>
 		/// Default filter operator values for each DataFilter.
@@ -591,32 +702,22 @@ namespace FilterTable
 		} = new HashSet<T>();
 
 		/// <summary>
+		/// Raises events when the list of selected items has changed.
+		/// </summary>
+		[Parameter]
+		public EventCallback SelectedItemsChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
 		/// Error that occurred on the page.
 		/// </summary>
 		public Exception? Exception
 		{
 			get; 
 			protected set;
-		}
-
-		/// <summary>
-		/// Raises events when the <see cref="DataFilterOperator"/> property changes.
-		/// </summary>
-		[Parameter]
-		public EventCallback<string> DataFilterOperatorChanged
-		{ 
-			get; 
-			set; 
-		}
-
-		/// <summary>
-		/// Raises events when the <see cref="DataFilterValues"/> property changes.
-		/// </summary>
-		[Parameter]
-		public EventCallback<string> DataFilterValueChanged
-		{ 
-			get; 
-			set; 
 		}
 
 		/// <summary>
@@ -696,6 +797,74 @@ namespace FilterTable
 		}
 
 		/// <summary>
+		/// Available page size options to display.
+		/// </summary>
+		[Parameter]
+		public int[] PageSizeOptions
+		{
+			get
+			{
+				return m_pageSizeOptions;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_pageSizeOptions)
+					return;
+
+				m_pageSizeOptions = value;
+
+				// Notify subscribers that the property changed.
+				PageSizeOptionsChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="PageSizeOptions"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<int[]> PageSizeOptionsChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// Determine if text selection is disabled for cells in the table.
+		/// 
+		/// When text selection is enabled, selecting a range of rows is more difficult.
+		/// </summary>
+		[Parameter]
+		public bool TextSelectionEnabled
+		{
+			get
+			{
+				return m_textSelectionEnabled;
+			}
+			set
+			{
+				// Don't set the property to its current value.
+				if(value == m_textSelectionEnabled)
+					return;
+
+				m_textSelectionEnabled = value;
+
+				// Notify subscribers that the property changed.
+				TextSelectionEnabledChanged.InvokeAsync(value);
+			}
+		}
+
+		/// <summary>
+		/// Property changed event for the <see cref="TextSelectionEnabled"/> property.
+		/// </summary>
+		[Parameter]
+		public EventCallback<bool> TextSelectionEnabledChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
 		/// Indicates if the CopyToClipboard button is disabled.
 		/// </summary>
 		protected bool CanCopyToClipboard
@@ -714,13 +883,33 @@ namespace FilterTable
 		}
 
 		/// <summary>
+		/// Read only list of filter operations defined for the added <see cref="DataFilter"/> columns.
+		/// </summary>
+		public virtual IList<FilterOperation> FilterOperations
+		{
+			get
+			{
+				return FilterOperationsProtected.AsReadOnly();
+			}
+		}
+
+		/// <summary>
 		/// Filter operations defined for the added DataFilter columns.
 		/// </summary>
-		public virtual List<FilterOperation> FilterOperations
-		{
-			get; 
-			set;
+		protected virtual List<FilterOperation> FilterOperationsProtected
+		{ 
+			get;
 		} = new List<FilterOperation>();
+
+		/// <summary>
+		/// Empty filter used by the data filters belonging to each Property.
+		/// 
+		/// The key identifies the name of the property.
+		/// </summary>
+		protected Dictionary<string, FilterOperation> EmptyFilters
+		{ 
+			get;
+		} = new Dictionary<string, FilterOperation>();
 
 		/// <summary>
 		/// Token used to cancel the previous query.
@@ -764,7 +953,7 @@ namespace FilterTable
 		/// <summary>
 		/// List of each DataFilter component.
 		/// 
-		/// The key identifies which <see cref="FilterOperations"/> the DataFilter belongs to.
+		/// The key identifies which <see cref="FilterOperationsProtected"/> the DataFilter belongs to.
 		/// </summary>
 		protected Dictionary<FilterOperation, DataFilter<T>> DataFilters
 		{ 
@@ -774,10 +963,34 @@ namespace FilterTable
 		/// <summary>
 		/// Indicates if <see cref="OnAfterRenderAsync"/> has been called at least once.
 		/// 
-		/// When <see cref="OnAfterRenderAsync"/> has been called, the <see cref="FilterOperations"/> have been updated and any changes made to a filter, 
+		/// When <see cref="OnAfterRenderAsync"/> has been called, the <see cref="FilterOperationsProtected"/> have been updated and any changes made to a filter, 
 		/// will cause the TableData to be reloaded, when a <see cref="FilterExpressionChanged"/> is called due to a filter expression being updated.
 		/// </summary>
 		protected bool InitialRenderingComplete
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// The item which was most recently selected, by clicking on its row.
+		/// 
+		/// This row is used to determine which range of items to select, if range selection is active.
+		/// </summary>
+		/// <see cref="OnRowClick"/>
+		protected T? LastSelectedItem
+		{
+			get; 
+			set;
+		}
+
+		/// <summary>
+		/// Indicates whether the most recently clicked item was found in the list of <see cref="SelectedItems"/>, when it was clicked.
+		/// 
+		/// This is used to determine whether to select a range or or deselect a range of items, if the Shift key is pressed.
+		/// </summary>
+		/// <see cref="OnRowClick"/>
+		protected bool SelectingRange
 		{
 			get;
 			set;
@@ -818,6 +1031,16 @@ namespace FilterTable
 		/// Backing field for the <see cref="GetColumnName"/> property.
 		/// </summary>
 		private GetColumnNameDelegate m_getColumnName;
+
+		/// <summary>
+		/// Backing field for the <see cref="PageSizeOptions"/> property.
+		/// </summary>
+		private int[] m_pageSizeOptions = new int[]{50, 100, 250, 500, 1000};
+
+		/// <summary>
+		/// Backing field for the <see cref="TextSelectionEnabled"/> property.
+		/// </summary>
+		private bool m_textSelectionEnabled = false;
 		#endregion
 	}
 }

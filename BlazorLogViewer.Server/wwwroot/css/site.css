@@ -63,37 +63,6 @@ a, .btn-link {
 		content: "An error has occurred."
 	}
 
-.nowrap {
-	white-space: nowrap;
-}
-
-td.less-padding {
-	padding: 2px 16px 2px 16px;
-}
-
-select.no-arrow {
-	appearance: none;
-}
-
-tr.selected {
-	background-color: #1E88E5 !important;
-}
-
-	tr.selected > td {
-		color: white !important;
-	}
-
-		tr.selected > td .mud-input {
-			color: white !important;
-		}
-
-input.column-filter {
-	width: 100%;
-	border-width: 0px 0px 1px;
-	border-color: #DADADA;
-	padding-bottom: 5px;
-}
-
 .cookie-consent {
 	position: fixed;
 	bottom: 8px;

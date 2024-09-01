@@ -140,6 +140,152 @@ namespace FilterTypes
 		}
 
 		/// <summary>
+		/// Parse the input string as a specified type.
+		/// </summary>
+		/// <param name="inputString">String to parse.</param>
+		/// <param name="valueType">Type to parse the string as.</param>
+		/// <param name="result">Parsed value or null if the value could not be parsed.</param>
+		/// <returns>Returns true if the value was successfully parsed.</returns>
+		public static bool TryParse(string inputString, Type valueType, out object? result)
+		{ 
+			if(valueType.IsAssignableFrom(typeof(string)))
+			{
+				result = (object) inputString;
+				return true;
+			}
+			else if(valueType.IsAssignableFrom(typeof(int)))
+			{
+				if(int.TryParse(inputString, out int parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(float)))
+			{
+				if(float.TryParse(inputString, out float parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(double)))
+			{
+				if(double.TryParse(inputString, out double parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(long)))
+			{
+				if(long.TryParse(inputString, out long parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(short)))
+			{
+				if(short.TryParse(inputString, out short parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(bool)))
+			{
+				if(bool.TryParse(inputString, out bool parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(byte)))
+			{
+				if(byte.TryParse(inputString, out byte parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(char)))
+			{
+				if(char.TryParse(inputString, out char parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(decimal)))
+			{
+				if(decimal.TryParse(inputString, out decimal parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(Guid)))
+			{
+				if(Guid.TryParse(inputString, out Guid parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(uint)))
+			{
+				if(uint.TryParse(inputString, out uint parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(DateTime)))
+			{
+				if(DateTime.TryParse(inputString, out DateTime parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsAssignableFrom(typeof(TimeSpan)))
+			{
+				// Generate the format string -1.12:34:56 from -1 12:34:56
+				if(TimeSpan.TryParse(inputString.Replace(" ", "."), out TimeSpan parseResult))
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+			else if(valueType.IsEnum)
+			{ 
+				if(Enum.TryParse(valueType, inputString, out object? parseResult) && parseResult != null)
+				{
+					result = (object) parseResult;
+					return true;
+				}
+			}
+
+			result = null;
+			return false;
+		}
+
+		/// <summary>
+		/// Parse the input string as a specified type.
+		/// </summary>
+		/// <typeparam name="T">Type to parse the string as.</typeparam>
+		/// <param name="inputString">String to parse.</param>
+		/// <param name="result">Parsed value or null if the value could not be parsed.</param>
+		/// <returns>Returns true if the value was successfully parsed.</returns>
+		public static bool TryParse<T>(string inputString, out T? result)
+		{ 
+			bool success = TryParse(inputString, typeof(T), out object? parsedValue);
+			result = (T?) (object?) parsedValue;
+			return success;
+		}
+
+		/// <summary>
 		/// Converts a filter operator to a string.
 		/// </summary>
 		/// <param name="filterOperator">Filter operator to convert to a string.</param>

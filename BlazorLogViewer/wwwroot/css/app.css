@@ -87,13 +87,6 @@ tr.selected {
 			color: white !important;
 		}
 
-input.column-filter {
-	width: 100%;
-	border-width: 0px 0px 1px;
-	border-color: #DADADA;
-	padding-bottom: 5px;
-}
-
 .cookie-consent {
 	position: fixed;
 	bottom: 8px;

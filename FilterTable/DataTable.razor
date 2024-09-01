@@ -2,56 +2,74 @@
 @typeparam T
 @using System.Reflection
 
-<MudTable @ref="Table" T="T" ServerData="@LoadData" Virtualize="false" HeaderClass="table-head-bordered" FixedHeader="true" FixedFooter="true" Breakpoint="Breakpoint.None" Bordered="true" Dense="true" Striped="true" Hover="true" HorizontalScrollbar="true" RowClassFunc="@GetRowClass" OnRowClick="@OnRowClick" @bind-RowsPerPage="RowsPerPage" @attributes="InputAttributes">
-	<ColGroup>
-		@foreach(var property in Properties)
-		{
-			<col style="width: 60px;" />
-		}
-	</ColGroup>
-	<HeaderContent>
-		@foreach(PropertyInfo property in Properties)
-		{
-			<MudTh class="data-table-header">
-				<div>
-					@if(string.Equals(property.Name, SortProperty, StringComparison.InvariantCultureIgnoreCase))
-					{
-						<MudTableSortLabel T="T" SortLabel="@property.Name" InitialDirection="SortDirection">@GetColumnName(property)</MudTableSortLabel>
-					}
-					else
-					{
-						<MudTableSortLabel T="T" SortLabel="@property.Name">@GetColumnName(property)</MudTableSortLabel>
-					}
-					<div class="data-table-header-column">
-						<div class="data-filter">
-							@foreach(FilterOperation filterOperation in FilterOperations)
-							{
-								if(filterOperation.Property == property.Name)
+<div class="data-table-root">
+	<MudTable @ref="Table" T="T" ServerData="@LoadData" Virtualize="false" HeaderClass="table-head-bordered" FixedHeader="true" FixedFooter="true" Breakpoint="Breakpoint.None" Bordered="true" Dense="true" Striped="true" Hover="true" HorizontalScrollbar="true" RowClassFunc="@GetRowClass" OnRowClick="@OnRowClick" @bind-RowsPerPage="RowsPerPage" @attributes="InputAttributes">
+		<ColGroup>
+			@foreach(var property in Properties)
+			{
+				<col style="width: 60px;" />
+			}
+		</ColGroup>
+		<HeaderContent>
+			@foreach(PropertyInfo property in Properties)
+			{
+				<MudTh class="data-table-header">
+					<div>
+						@* If the current property is the property being sorted by *@
+						@if(string.Equals(property.Name, SortProperty, StringComparison.InvariantCultureIgnoreCase))
+						{
+							@* Show the sort label with the active sort direction *@
+							<MudTableSortLabel T="T" SortLabel="@property.Name" InitialDirection="SortDirection">@GetColumnName(property)</MudTableSortLabel>
+						}
+						else
+						{
+							@* Show the sort label without the sort direction *@
+							<MudTableSortLabel T="T" SortLabel="@property.Name">@GetColumnName(property)</MudTableSortLabel>
+						}
+						<div class="data-table-header-column">
+							<div class="data-filter">
+								@* Empty data filter that new filter values can be entered into *@
+								<DataFilter class="data-filter-empty" T="T" FilterOperation="EmptyFilters[property.Name]" />
+						
+								@foreach(FilterOperation filterOperation in FilterOperations)
 								{
-									<DataFilter @ref="@DataFilters[filterOperation]" T="T" FilterOperation="filterOperation"/>
+									if(filterOperation.Property == property.Name)
+									{
+										@* Filled out data filter, that can be modified *@
+										<DataFilter @ref="@DataFilters[filterOperation]" T="T" FilterOperation="filterOperation"/>
+									}
 								}
-							}
+							</div>
 						</div>
 					</div>
-				</div>
-			</MudTh>
-		}
-	</HeaderContent>
-	<RowTemplate>
-		@foreach(var property in Properties)
-		{
-			<MudTd Class="nowrap less-padding" DataLabel="@property.Name">@GetPropertyValue(context, property)</MudTd>
-		}
-	</RowTemplate>
-	<PagerContent>
-		<MudButton OnClick="CopyToClipboard" Disabled="!CanCopyToClipboard">Copy page</MudButton>
-		@if(SelectedItems.Count > 0)
-		{
-			<MudButton OnClick="CopySelectionToClipboard" Disabled="!CanCopyToClipboard">Copy selected</MudButton>
-		}
-		<MudTablePager PageSizeOptions="new int[]{50, 100, 250, 500, 1000}">Camel</MudTablePager>
-	</PagerContent>
-</MudTable>
+				</MudTh>
+			}
+		</HeaderContent>
+		<RowTemplate>
+			@foreach(var property in Properties)
+			{
+				@* Formatted cell value *@
+				<MudTd Class="@("nowrap less-padding " + (TextSelectionEnabled ? "" : "noselect "))" DataLabel="@property.Name">@GetPropertyValue(context, property)</MudTd>
+			}
+		</RowTemplate>
+		<PagerContent>
+			<MudButton OnClick="Reload">Reload</MudButton>
+			<MudButton OnClick="CopyToClipboard" Disabled="!CanCopyToClipboard">Copy page</MudButton>
+
+			@* Only allow copying selection to clipboard, if at least one row is selected *@
+			@if(SelectedItems.Count > 0)
+			{
+				<MudButton OnClick="CopySelectionToClipboard" Disabled="!CanCopyToClipboard">Copy selected</MudButton>
+			}
+
+			@* Only show page size options control, if at least one page size option has been defined *@
+			@if((PageSizeOptions?.Length ?? 0) > 0)
+			{
+				<MudTablePager PageSizeOptions="@PageSizeOptions" />
+			}
+		</PagerContent>
+	</MudTable>
+</div>
 
 @if(Exception != null)
 {

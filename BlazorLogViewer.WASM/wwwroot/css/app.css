@@ -62,3 +62,45 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+
+.cookie-consent {
+	position: fixed;
+	bottom: 8px;
+	right: 20px;
+	width: 260px;
+	padding-top: 7px;
+	height: 83px;
+	color: #fff;
+	line-height: 20px;
+	padding-left: 10px;
+	padding-right: 10px;
+	font-size: 14px;
+	background: #292929;
+	z-index: 120;
+	cursor: pointer;
+	border-radius: 3px;
+}
+
+.allow-button {
+	height: 20px;
+	width: 104px;
+	color: #fff;
+	font-size: 12px;
+	line-height: 10px;
+	border-radius: 3px;
+	border: 1px solid green;
+	background-color: green;
+}
+
+.sidebar {
+	flex-grow: 0;
+	flex-shrink: 1;
+	flex-basis: auto;
+}
+
+.main {
+	flex-grow: 1;
+	flex-shrink: 1;
+	flex-basis: auto;
+	overflow: hidden;
+}

@@ -13,7 +13,6 @@ namespace LogEntryDataAccess.Controllers
 	/// Reads <see cref="LogEntry"/> data from the database.
 	/// </summary>
 	/// <seealso cref="https://www.c-sharpcorner.com/article/enable-windows-authentication-in-web-api-and-angular-app/"/>
-	[Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class LogEntryController : ControllerBase

@@ -7,7 +7,7 @@
 @inject LogEntryService LogEntryService
 
 <div>
-	<DataTable @ref="Table" T="LogEntry" SortProperty="TimeStamp" SortDirection="SortDirection.Descending" GetData="GetData" GetPropertyValue="GetPropertyValue" DataFilterOperatorChanged=" DataFilterOperatorChanged" DataFilterValueChanged="DataFilterValueChanged" Height="calc(100vh - 120px)" />
+	<DataTable @ref="Table" T="LogEntry" SortProperty="TimeStamp" SortDirection="SortDirection.Descending" GetData="GetData" GetPropertyValue="GetPropertyValue" FilterOperationChanged="FilterOperationChanged" Height="calc(100vh - 120px)" />
 </div>
 
 @if(Exception != null)

@@ -32,6 +32,7 @@ namespace FilterTypes
 			Value		= value;
 		}
 
+		#region Methods
 		/// <summary>
 		/// Creates a new <see cref="FilterOperationValue"/> based on the values of the <see cref="FilterOperation"/>.
 		/// </summary>
@@ -41,6 +42,23 @@ namespace FilterTypes
 			return new FilterOperationValue(filterOperationClass.Property, filterOperationClass.Operator, filterOperationClass.Value);
 		}
 
+		/// <summary>
+		/// Determine if this object has the same value as the other object.
+		/// </summary>
+		/// <param name="other">Object to compare this object with.</param>
+		/// <returns>Returns true if this object has the same value as the <paramref name="other"/> object.</returns>
+		public bool Equals(FilterOperation other)
+		{ 
+			if(	Property == other?.Property &&
+				Operator == other?.Operator &&
+				Value == other?.Value)
+				return true;
+
+			return false;
+		}
+		#endregion
+
+		#region Properties
 		/// <summary>
 		/// Name of the property that the filter will apply to.
 		/// </summary>
@@ -90,6 +108,7 @@ namespace FilterTypes
 				this.SetProperty(ref m_value, value, NotifyPropertyChanged);
 			}
 		}
+		#endregion
 
 		#region Fields
 		/// <summary>

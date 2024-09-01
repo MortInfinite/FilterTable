@@ -1,13 +1,15 @@
 ﻿@inherits ComponentBase
 @typeparam T
 
-<nobr>
-	<select class="no-arrow" @bind="FilterOperation.Operator" @attributes=@InputAttributes>
-	@foreach(FilterOperators currentOperator in Operators)
-	{
-		<option value="@currentOperator">@currentOperator.StringFormat()</option>
-	}
-</select>
-	@* The input box will have the " invalid" class applied if the filter string isn't empty or valid. *@
-	<input class="column-filter@((FilterEmpty || FilterValid) ? "" : " invalid")" type="text" @bind="FilterOperation.Value" />
-</nobr>
+<div class="data-filter">
+	<nobr>
+		<select class="no-arrow" @bind="FilterOperation.Operator" @attributes=@InputAttributes>
+		@foreach(FilterOperators currentOperator in Operators)
+		{
+			<option value="@currentOperator">@currentOperator.StringFormat()</option>
+		}
+	</select>
+		@* The input box will have the " invalid" class applied if the filter string isn't empty or valid. *@
+		<input class="column-filter@((FilterEmpty || FilterValid) ? "" : " invalid")" type="text" @bind="FilterOperation.Value" />
+	</nobr>
+</div>
