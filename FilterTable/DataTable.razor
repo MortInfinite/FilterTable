@@ -56,11 +56,17 @@
 			<MudButton OnClick="Reload">Reload</MudButton>
 			<MudButton OnClick="CopyToClipboard" Disabled="!CanCopyToClipboard">Copy page</MudButton>
 
+			@* Toggle between text selection or row selection *@
+			<MudButton OnClick="ToggleTextSelectionEnabled" Disabled="!CanCopyToClipboard" StartIcon="@(TextSelectionEnabled ? Icons.Material.Filled.Edit : Icons.Material.Filled.TableRows)">@(TextSelectionEnabled ? "Text selection" : "Row selection")</MudButton>
+
 			@* Only allow copying selection to clipboard, if at least one row is selected *@
 			@if(SelectedItems.Count > 0)
 			{
 				<MudButton OnClick="CopySelectionToClipboard" Disabled="!CanCopyToClipboard">Copy selected</MudButton>
 			}
+
+			@* Pager content used to add custom buttons to the table *@
+			@PagerContent
 
 			@* Only show page size options control, if at least one page size option has been defined *@
 			@if((PageSizeOptions?.Length ?? 0) > 0)

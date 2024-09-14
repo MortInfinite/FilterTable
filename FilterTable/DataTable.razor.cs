@@ -259,6 +259,10 @@ namespace FilterTable
 				// Clear currently selected items, before returning new results.
 				// This is neccessary because the hash values of the old items don't match the hash values of the newly loaded values.
 				SelectedItems.Clear();
+
+				// Notify subscribers that the list of selected items has changed.
+				await SelectedItemsChanged.InvokeAsync();
+
 				LastSelectedItem = default(T);
 			}
 
@@ -430,6 +434,38 @@ namespace FilterTable
 			// Notify subscribers that the list of selected items has changed.
 			await SelectedItemsChanged.InvokeAsync();
 		}
+
+		/// <summary>
+		/// Toggle between text selection and row selection and clears the currently selected text and currently selected rows.
+		/// </summary>
+		/// <returns>Created task.</returns>
+		protected virtual async Task ToggleTextSelectionEnabled()
+		{ 
+			TextSelectionEnabled = !TextSelectionEnabled;
+
+			await ClearSelection();
+		}
+
+		/// <summary>
+		/// Clear selected rows and selected text.
+		/// </summary>
+		/// <returns>Created task.</returns>
+		protected virtual async Task ClearSelection()
+		{ 
+			// Clears currently selected text.
+			if(JSRuntime != null)
+				await JSRuntime.InvokeVoidAsync("clearSelectedText");
+
+			if(SelectedItems.Any())
+			{
+				// Clears currently selected rows.
+				SelectedItems.Clear();
+
+				// Notify subscribers that the list of selected items has changed.
+				await SelectedItemsChanged.InvokeAsync();
+			}
+		}
+		
 		#endregion
 
 		#region Event handlers
@@ -859,6 +895,16 @@ namespace FilterTable
 		/// </summary>
 		[Parameter]
 		public EventCallback<bool> TextSelectionEnabledChanged
+		{
+			get;
+			set;
+		}
+
+		/// <summary>
+		/// Content to add to the pager area, to the right of clipboard-to-clipboard buttons.
+		/// </summary>
+		[Parameter]
+		public RenderFragment? PagerContent
 		{
 			get;
 			set;

@@ -26,4 +26,4 @@ Example project, which demonstrates how to use the DataAccessService class, to f
 # LogData
 Defines the LogEntry example data type, that is returned by the LogDataAccess project and shown by the BlazorLogViewer projects.
 
-This project is implemented in .NET 6.
+This project is implemented in .NET 8.
