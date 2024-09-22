@@ -22,5 +22,14 @@
 			get;
 			set;
 		}
+
+		/// <summary>
+		/// Exception that was thrown, when trying to retrieve data.
+		/// </summary>
+		public Exception? Exception
+		{
+			get; 
+			set;
+		}
 	}
 }

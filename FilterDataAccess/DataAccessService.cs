@@ -124,19 +124,21 @@ namespace FilterDataAccess
 						queryResult.Results = new TValue[0];
 					}
 				}
-				catch(OperationCanceledException)
+				catch(OperationCanceledException exception)
 				{ 
 					System.Diagnostics.Trace.WriteLine($"Canceled retrieving filtered values.");
 
 					queryResult.TotalCount	= 0;
-					queryResult.Results	= new TValue[0];
+					queryResult.Results		= new TValue[0];
+					queryResult.Exception	= exception;
 				}
 				catch(Exception exception)
 				{ 
 					System.Diagnostics.Trace.WriteLine($"Failed to retrieve filtered values: {exception.ToString()}.");
 
 					queryResult.TotalCount	= 0;
-					queryResult.Results	= new TValue[0];
+					queryResult.Results		= new TValue[0];
+					queryResult.Exception	= exception;
 				}
 
 				System.Diagnostics.Trace.WriteLine("Finished GetFilteredValues.");

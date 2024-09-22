@@ -19,20 +19,11 @@ namespace BlazorLogViewer.Pages
 	{
 		#region Methods
 		/// <summary>
-		/// Updates the properties from the query string and ensures that the navigation manager location is monitored for changes.
+		/// Updates the properties from the query string.
 		/// </summary>
-		protected override void OnInitialized()
-		{
-			// Receive events when the query string changes.
-			if(NavigationManager != null)
-				NavigationManager.LocationChanged    += NavigationManager_LocationChanged;
-		}
-
 		protected override async Task OnAfterRenderAsync(bool firstRender)
 		{
 			await base.OnAfterRenderAsync(firstRender);
-
-			//await Ping(CancellationToken.None);
 
 			// Set default values on the table.
 			// Unfortunately this can't be done on the razor page, it has to be done in code behind.
@@ -43,7 +34,8 @@ namespace BlazorLogViewer.Pages
 			}
 			
 			// Copy query string parameters to the table's filters.
-			GetPropertiesFromQueryString();
+			if(!InitialRenderingComplete)
+				GetPropertiesFromQueryString();
 			
 			InitialRenderingComplete = true;
 		}
@@ -91,6 +83,9 @@ namespace BlazorLogViewer.Pages
 					Items		= queryResult.Results
 				};
 
+				// Remember the error message returned by calling the log entry service.
+				Exception = queryResult.Exception;
+
 				return filteredResult;
 			}
 			catch(Exception exception)
@@ -99,7 +94,7 @@ namespace BlazorLogViewer.Pages
 				// can't connect to the LogEntryService and URL specified in the "LogEntryServiceUrl" setting of the "appsettings.json" 
 				// (Found in "wwwroot") is most likely doesn't match the correct address of the LogEntryDataAccess project.
 
-				// Remember the error message returned by calling the log entry service.
+				// Remember the error message thrown when calling the log entry service.
 				Exception = exception;
 
 				// Return an empty result.
@@ -169,35 +164,36 @@ namespace BlazorLogViewer.Pages
 
 				// Extract each key/value pair from the query string.
 				IList<KeyValuePair<string, string>> queryStringParts = NavigationManager.GetQueryString();
-
 				List<FilterOperation> filterOperations = new List<FilterOperation>();
-				FilterOperation? currentFilterOperation = null;
 
-				// Parse each part of the query string, adding filters for each specified filter operation.
-				foreach(KeyValuePair<string, string> queryStringPart in queryStringParts)
+				// Parse each numbered set of filter operators, up to a maximum of the number of query string parts specified.
+				// This is done to find the property, value and operator that belong together.
+				for(int count=0; count<queryStringParts.Count; count++)
 				{
-					// If the current query string part is the value of a property.
-					if(queryStringPart.Key.EndsWith("_V"))
-					{ 
-						currentFilterOperation			= new FilterOperation();
-						currentFilterOperation.Property = queryStringPart.Key.Substring(0, queryStringPart.Key.Length-2);
-						currentFilterOperation.Value	= queryStringPart.Value;
-						continue;
-					}
+					// Retrieve the filter values from the query string.
+					IEnumerable<KeyValuePair<string, string>> filterValues = queryStringParts.Where(queryStringPart => queryStringPart.Key.EndsWith($"_V{count}"));
+					if(filterValues.Any())
+					{
+						KeyValuePair<string, string> filterValue = filterValues.Last();
 
-					// If the current query string element is the operator of the previously specified property.
-					if(queryStringPart.Key.EndsWith("_O") && queryStringPart.Key.Substring(0, queryStringPart.Key.Length-2) == currentFilterOperation?.Property)
-					{ 
-						// If the filter operator is valid, create a filter operation matching the filter.
-						if(Enum.TryParse<FilterOperators>(queryStringPart.Value, out var filterOperator))
+						// Get the name of the property, to which the value belongs.
+						string property = filterValue.Key.Substring(0, filterValue.Key.Length-$"_V{count}".Length);
+
+						// Get the filter operator as a string.
+						string? filterOperatorString = NavigationManager.TryGetQueryString<string>($"{property}_O{count}")?.LastOrDefault();
+
+						// Attempt to parse the filter operator.
+						if(!Enum.TryParse<FilterOperators>(filterOperatorString, true, out var filterOperator))
+							filterOperator = FilterOperators.Equals;
+
+						FilterOperation currentFilterOperation = new FilterOperation()
 						{
-							currentFilterOperation.Operator = filterOperator;
-							filterOperations.Add(currentFilterOperation);
-						}
+							Property	= property,
+							Value		= filterValue.Value,
+							Operator	= filterOperator
+						};
 
-						currentFilterOperation = null;
-
-						continue;
+						filterOperations.Add(currentFilterOperation);
 					}
 				}
 
@@ -225,27 +221,22 @@ namespace BlazorLogViewer.Pages
 
 			List<KeyValuePair<string, string>> nameValuePairs = new List<KeyValuePair<string, string>>();
 
+			int filterOperationIndex = 0;
+
 			foreach(var filterOperation in Table.FilterOperations)
 			{ 
 				if(!string.IsNullOrEmpty(filterOperation.Value))
 				{
-					nameValuePairs.Add(new KeyValuePair<string, string>(filterOperation.Property+"_V", filterOperation.Value));
-					nameValuePairs.Add(new KeyValuePair<string, string>(filterOperation.Property+"_O", filterOperation.Operator.ToString()));
+					// Add the value and operator of the filter operation, as query parameters.
+					// The value and operator share the same unique number, indicating that they belong to the same filter operator.
+					nameValuePairs.Add(new KeyValuePair<string, string>(filterOperation.Property+$"_V{filterOperationIndex}", filterOperation.Value));
+					nameValuePairs.Add(new KeyValuePair<string, string>(filterOperation.Property+$"_O{filterOperationIndex}", filterOperation.Operator.ToString()));
+
+					filterOperationIndex++;
 				}
 			}
 
 			NavigationManager.SetQueryString(nameValuePairs);
-		}
-		#endregion
-
-		#region Event handlers
-		/// <summary>
-		/// Updates properties with values from the query string, when the location changes.
-		/// </summary>
-		protected virtual void NavigationManager_LocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
-		{
-			// Copy query string parameters to the table's filters.
-			GetPropertiesFromQueryString();
 		}
 		#endregion
 

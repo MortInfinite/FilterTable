@@ -6,9 +6,11 @@ using FilterTypes;
 
 namespace BlazorLogViewer.Shared
 {
+	/// <summary>
+	/// Provides helper methods to use by the navigation manager.
+	/// </summary>
 	public static class NavigationManagerExtensions
 	{
-		/*
 		/// <summary>
 		/// Retrieve a dictionary of query filter arguments and their values.
 		/// Query filters that don't have a value, are skipped.
@@ -16,7 +18,7 @@ namespace BlazorLogViewer.Shared
 		/// </summary>
 		/// <param name="navigationManager">Navigation manager from which to retrieve the query string.</param>
 		/// <returns>Dictionary of query string arguments and their values.</returns>
-		public static Dictionary<string, string>? GetQueryString(this NavigationManager navigationManager)
+		public static Dictionary<string, string>? GetQueryStringDictionary(this NavigationManager navigationManager)
 		{
 			Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
 
@@ -43,9 +45,9 @@ namespace BlazorLogViewer.Shared
 
 			return result;
 		}
-		*/
+
 		/// <summary>
-		/// Retrieve a dictionary of query filter arguments and their values.
+		/// Retrieve a list of query filter arguments and their values.
 		/// 
 		/// Query filters that don't have a value, are skipped.
 		/// If the query filter specifies the same argument multiple times, all values are returned.
