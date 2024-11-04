@@ -1,6 +1,16 @@
 ﻿div.data-filter {
 }
 
+/* Override browser's default color */
+div.data-filter > nobr > select {
+	background-color: transparent;
+	min-width: 2em;
+}
+
+::deep select.no-arrow {
+	appearance: none;
+}
+
 ::deep .column-filter {
 	border-bottom-width: 1px;
 	border-color: #DADADA;

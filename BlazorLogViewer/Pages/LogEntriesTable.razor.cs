@@ -1,17 +1,14 @@
-﻿using System.Linq.Expressions;
+﻿using System.Globalization;
+using System.Linq.Expressions;
 using System.Reflection;
 using BlazorLogViewer.Data;
 using BlazorLogViewer.Shared;
-using Microsoft.AspNetCore.Components;
 using FilterTable;
-using LogData;
 using FilterTypes;
+using LogData;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Primitives;
-using System;
-using System.Globalization;
-using System.Runtime.Serialization;
+using static MudBlazor.CategoryTypes;
 
 namespace BlazorLogViewer.Pages
 {
@@ -24,18 +21,24 @@ namespace BlazorLogViewer.Pages
 		protected override async Task OnAfterRenderAsync(bool firstRender)
 		{
 			await base.OnAfterRenderAsync(firstRender);
-
-			// Set default values on the table.
-			// Unfortunately this can't be done on the razor page, it has to be done in code behind.
-			if(Table != null)
-			{
-				Table.DefaultDataFilterOperators	[nameof(LogEntry.TimeStamp)]	= FilterOperators.GreaterThanOrEqual;
-				Table.DefaultDataFilterValues		[nameof(LogEntry.TimeStamp)]	= Configuration["TimeSpan"] ?? "-1";
-			}
 			
-			// Copy query string parameters to the table's filters.
+			// Only set these the first time the page is rendered
 			if(!InitialRenderingComplete)
+			{
+				// Copy query string parameters to the table's filters.
 				GetPropertiesFromQueryString();
+
+				// Set default values on the table.
+				// Unfortunately this can't be done on the razor page, it has to be done in code behind.
+				if(Table != null)
+				{
+					// Set the TimeStamp filter operator, as a default value.
+					Table.DefaultDataFilterOperators	[nameof(LogEntry.TimeStamp)]	= FilterOperators.GreaterThanOrEqual;
+
+					// Add a default filter to the table.
+					Table.AddFilter(nameof(LogEntry.TimeStamp), FilterOperators.GreaterThanOrEqual, "-1000");
+				}
+			}
 			
 			InitialRenderingComplete = true;
 		}
@@ -326,7 +329,7 @@ namespace BlazorLogViewer.Pages
 		{
 			get; 
 			set;
-		} = "yyyy-MM-dd hh:mm:ss.ffff";
+		} = "yyyy-MM-dd HH:mm:ss.ffff";
 
 		/// <summary>
 		/// Format string used to format <see cref="TimeSpan"/> values shown in the table.
@@ -335,7 +338,7 @@ namespace BlazorLogViewer.Pages
 		{
 			get; 
 			set;
-		} = "-d hh:mm:ss.ffff";
+		} = "-d HH:mm:ss.ffff";
 		#endregion
 	}
 }

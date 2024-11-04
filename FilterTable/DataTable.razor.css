@@ -6,10 +6,6 @@
 	padding: 2px 16px 2px 16px;
 }
 
-::deep select.no-arrow {
-	appearance: none;
-}
-
 ::deep tr.selected {
 	background-color: #1E88E5 !important;
 }

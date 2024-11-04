@@ -29,7 +29,7 @@
 						<div class="data-table-header-column">
 							<div class="data-filter">
 								@* Empty data filter that new filter values can be entered into *@
-								<DataFilter class="data-filter-empty" T="T" FilterOperation="EmptyFilters[property.Name]" />
+								<DataFilter T="T" FilterOperation="EmptyFilters[property.Name]" />
 						
 								@foreach(FilterOperation filterOperation in FilterOperations)
 								{

@@ -8,7 +8,7 @@
 		{
 			<option value="@currentOperator">@currentOperator.StringFormat()</option>
 		}
-	</select>
+		</select>
 		@* The input box will have the " invalid" class applied if the filter string isn't empty or valid. *@
 		<input class="column-filter@((FilterEmpty || FilterValid) ? "" : " invalid")" type="text" @bind="FilterOperation.Value" />
 	</nobr>

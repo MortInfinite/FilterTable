@@ -11,6 +11,7 @@ namespace FilterTable
 	{
 		public DataTable()
 		{
+			DefaultDataFilterOperators.DictionaryChanged += DefaultDataFilterOperators_DictionaryChanged;
 		}
 
 		#region Types
@@ -220,6 +221,10 @@ namespace FilterTable
 		/// <returns>Table data containing matching log entries.</returns>
 		protected virtual async Task<TableData<T>> LoadData(TableState state)
 		{
+			// Cancel the previous call to GetData and create a new cancellation token to use with the next GetData call.
+			GetDataCancellation?.Cancel();
+			GetDataCancellation = new CancellationTokenSource();
+
 			var tableData = new TableData<T>()
 			{ 
 				TotalItems	= 0,
@@ -239,7 +244,7 @@ namespace FilterTable
 																			.Select(currentFilter => (FilterOperationValue) currentFilter)
 																			.ToArray();
 
-				DataTable<T>.FilteredResult filteredResult = await GetData(filters, state.SortLabel, state.SortDirection == SortDirection.Ascending, state.Page * state.PageSize, state.PageSize, default);
+				DataTable<T>.FilteredResult filteredResult = await GetData(filters, state.SortLabel, state.SortDirection == SortDirection.Ascending, state.Page * state.PageSize, state.PageSize, GetDataCancellation.Token);
 
 				tableData.TotalItems	= filteredResult.TotalCount;
 				tableData.Items			= filteredResult.Items;
@@ -465,10 +470,7 @@ namespace FilterTable
 				await SelectedItemsChanged.InvokeAsync();
 			}
 		}
-		
-		#endregion
 
-		#region Event handlers
 		/// <summary>
 		/// Copy the table to the clipboard.
 		/// </summary>
@@ -518,7 +520,10 @@ namespace FilterTable
 				CanCopyToClipboard = true;
 			}
 		}
+		
+		#endregion
 
+		#region Event handlers
 		/// <summary>
 		/// Ensure an empty data filter exists for each property and reload the server data, now that values changed.
 		/// </summary>
@@ -562,9 +567,21 @@ namespace FilterTable
 				AddFilter(filterOperation.Property, filterOperation.Operator, filterOperation.Value);
 
 				// Clear the value of the empty filter, so it can be reused.
-				filterOperation.Operator = DefaultDataFilterOperators.GetValueOrDefault(filterOperation.Property, FilterOperators.Equals);;
+				filterOperation.Operator = DefaultDataFilterOperators.GetValueOrDefault(filterOperation.Property, FilterOperators.Equals);
 				filterOperation.Value = string.Empty;
 			}
+		}
+
+		/// <summary>
+		/// When changing the default data filter operator, also change the currently shown empty filter.
+		/// </summary>
+		/// <param name="source">Default data filter operators dictionary, which changed.</param>
+		/// <param name="change">Kind of change that occurred.</param>
+		protected virtual void DefaultDataFilterOperators_DictionaryChanged(IDictionary<string, FilterOperators> source, DictionaryChangedEventArgs<string> change)
+		{
+			if(change.ChangeAction == DictionaryChange.ItemChanged)
+				if(EmptyFilters.ContainsKey(change.Key))
+					EmptyFilters[change.Key].Operator = source[change.Key];
 		}
 
 		#endregion
@@ -716,18 +733,10 @@ namespace FilterTable
 		/// <summary>
 		/// Default filter operator values for each DataFilter.
 		/// </summary>
-		public Dictionary<string, FilterOperators> DefaultDataFilterOperators
+		public ObservableDictionary<string, FilterOperators> DefaultDataFilterOperators
 		{
 			get; 
-		} = new Dictionary<string, FilterOperators>();
-
-		/// <summary>
-		/// Default filter values for each DataFilter.
-		/// </summary>
-		public Dictionary<string, string?> DefaultDataFilterValues
-		{
-			get; 
-		} = new Dictionary<string, string?>();
+		} = new ObservableDictionary<string, FilterOperators>();
 
 		/// <summary>
 		/// Items selected in the table.
@@ -1050,6 +1059,15 @@ namespace FilterTable
 			get; 
 			set;
 		} = 50;
+
+		/// <summary>
+		/// Cancellation token source used to cancel the current GetData call, when making a new call.
+		/// </summary>
+		protected virtual CancellationTokenSource GetDataCancellation
+		{
+			get;
+			set;
+		}
 		#endregion
 
 		#region Fields
