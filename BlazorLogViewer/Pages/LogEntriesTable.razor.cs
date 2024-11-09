@@ -26,11 +26,11 @@ namespace BlazorLogViewer.Pages
 			if(!InitialRenderingComplete)
 			{
 				// Copy query string parameters to the table's filters.
-				GetPropertiesFromQueryString();
+				bool filtersModified = GetPropertiesFromQueryString();
 
-				// Set default values on the table.
+				// Set default values on the table, unless the query string already contains a set of filter criteria.
 				// Unfortunately this can't be done on the razor page, it has to be done in code behind.
-				if(Table != null)
+				if(!filtersModified && Table != null)
 				{
 					// Set the TimeStamp filter operator, as a default value.
 					Table.DefaultDataFilterOperators	[nameof(LogEntry.TimeStamp)]	= FilterOperators.GreaterThanOrEqual;
@@ -41,23 +41,6 @@ namespace BlazorLogViewer.Pages
 			}
 			
 			InitialRenderingComplete = true;
-		}
-
-		/// <summary>
-		/// Call the log entry service, to determine if the service can be found.
-		/// </summary>
-		/// <param name="cancellationToken">Token used to cancel the operation.</param>
-		/// <returns>Result returned from the Ping call.</returns>
-		protected virtual async Task<string> Ping(CancellationToken cancellationToken)
-		{ 
-			try
-			{
-				return await LogEntryService.Ping(cancellationToken);
-			}
-			catch(Exception exception)
-			{ 
-				return exception.Message;
-			}
 		}
 
 		/// <summary>
@@ -152,12 +135,15 @@ namespace BlazorLogViewer.Pages
 		/// <summary>
 		/// Updates properties with values from the query string.
 		/// </summary>
-		protected virtual void GetPropertiesFromQueryString()
+		/// <returns>
+		/// Returns true if any filter criteria was modified.
+		/// </returns>
+		protected virtual bool GetPropertiesFromQueryString()
 		{ 
 			if(NavigationManager == null || Table == null)
-				return;
+				return false;
 			if(UpdatingPropertiesFromQueryString)
-				return;
+				return false;
 
 			try
 			{
@@ -203,10 +189,12 @@ namespace BlazorLogViewer.Pages
 				// Determine if the generated list of filters match the filters that already exist.
 				bool filtersIdentical = filterOperations.All(newFilterOperation => Table.FilterOperations.Any(existingFilterOperation => newFilterOperation.Equals(existingFilterOperation))) && filterOperations.Count == Table.FilterOperations.Count;
 				if(filtersIdentical)
-					return;
+					return false;
 
 				// Replace the set of filters to use.
 				Table.ReplaceFilters(filterOperations);
+
+				return true;
 			}
 			finally
 			{ 
